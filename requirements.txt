@@ -1,0 +1,13 @@
+torch
+torchvision
+numpy<2
+matplotlib
+tqdm
+pyyaml
+tensorboard
+scikit-learn
+umap-learn
+omegaconf
+dataset
+einops
+requests
