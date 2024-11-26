@@ -69,10 +69,11 @@ class GameFrameDataset(Dataset):
             # Load just the shape information without loading the full array
             shard_size = np.load(shard_path, mmap_mode="r").shape[0]
             self.shard_sizes.append(shard_size)
-            self.cumulative_sizes.append(self.cumulative_sizes[-1] + shard_size)
+            self.cumulative_sizes.append(
+                self.cumulative_sizes[-1] + shard_size)
 
         # Initialize shard cache if preloading
-        self.shard_cache: Dict[int, np.ndarray] = {}
+        self.shard_cache: Dict[int, Dict[str, np.ndarray]] = {}
         if preload_shards:
             self._preload_all_shards()
 
@@ -104,7 +105,8 @@ class GameFrameDataset(Dataset):
             )
 
         frame_path = os.path.join(self.shard_dir, self.frame_shards[shard_idx])
-        action_path = os.path.join(self.shard_dir, self.action_shards[shard_idx])
+        action_path = os.path.join(
+            self.shard_dir, self.action_shards[shard_idx])
 
         frames = np.load(frame_path)
         actions = np.load(action_path)
