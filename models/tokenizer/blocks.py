@@ -23,6 +23,10 @@ class EncoderDecoderConfig:
 
 
 class Encoder(nn.Module):
+    """
+    VQ-VAE Encoder
+    """
+
     def __init__(self, config: EncoderDecoderConfig) -> None:
         super().__init__()
         self.config = config
@@ -42,7 +46,7 @@ class Encoder(nn.Module):
             attn = nn.ModuleList()
             block_in = config.ch * in_ch_mult[i_level]
             block_out = config.ch * config.ch_mult[i_level]
-            for i_block in range(self.config.num_res_blocks):
+            for _ in range(self.config.num_res_blocks):
                 block.append(
                     ResnetBlock(
                         in_channels=block_in,
@@ -85,6 +89,12 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Encode image and return embeddings
+
+        :param x: input image batch
+        :return: embeddings
+        """
 
         temb = None  # timestep embedding
 
@@ -113,6 +123,10 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+    """
+    VQ-VAE Decoder
+    """
+
     def __init__(self, config: EncoderDecoderConfig) -> None:
         super().__init__()
         self.config = config
@@ -124,7 +138,8 @@ class Decoder(nn.Module):
         block_in = config.ch * config.ch_mult[self.num_resolutions - 1]
         curr_res = config.resolution // 2 ** (self.num_resolutions - 1)
         print(
-            f"Tokenizer : shape of latent is {config.z_channels, curr_res, curr_res}."
+            f"Tokenizer : shape of latent is {
+                config.z_channels, curr_res, curr_res}."
         )
 
         # z to block_in
@@ -154,7 +169,7 @@ class Decoder(nn.Module):
             block = nn.ModuleList()
             attn = nn.ModuleList()
             block_out = config.ch * config.ch_mult[i_level]
-            for i_block in range(config.num_res_blocks + 1):
+            for _ in range(config.num_res_blocks + 1):
                 block.append(
                     ResnetBlock(
                         in_channels=block_in,
@@ -181,6 +196,12 @@ class Decoder(nn.Module):
         )
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
+        """
+        Decode embeddings and return reconstructed image
+
+        :param z: image embeddings
+        :return: recon pixel values
+        """
         temb = None  # timestep embedding
 
         # z to block_in
@@ -208,17 +229,33 @@ class Decoder(nn.Module):
 
 
 def nonlinearity(x: torch.Tensor) -> torch.Tensor:
+    """
+    Sigmoid nonlinearity
+
+    :param x: input tensor
+    :return: activation value
+    """
     # swish
     return x * torch.sigmoid(x)
 
 
 def Normalize(in_channels: int) -> nn.Module:
+    """
+    CNN group norm
+
+    :param in_channels: channels in conv layer
+    :return: Normed group
+    """
     return torch.nn.GroupNorm(
         num_groups=32, num_channels=in_channels, eps=1e-6, affine=True
     )
 
 
 class Upsample(nn.Module):
+    """
+    Upsample with Conv2D transpose
+    """
+
     def __init__(self, in_channels: int, with_conv: bool) -> None:
         super().__init__()
         self.with_conv = with_conv
@@ -228,13 +265,24 @@ class Upsample(nn.Module):
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = torch.nn.functional.interpolate(x, scale_factor=2.0, mode="nearest")
+        """
+        Upsample and pass through Conv2D by factor of 2
+
+        :param x: input
+        :return: upsampled input
+        """
+        x = torch.nn.functional.interpolate(
+            x, scale_factor=2.0, mode="nearest")
         if self.with_conv:
             x = self.conv(x)
         return x
 
 
 class Downsample(nn.Module):
+    """
+    Downsample image
+    """
+
     def __init__(self, in_channels: int, with_conv: bool) -> None:
         super().__init__()
         self.with_conv = with_conv
@@ -245,6 +293,12 @@ class Downsample(nn.Module):
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Downsample image by factor of 2
+
+        :param x: input image
+        :return: scaled image
+        """
         if self.with_conv:
             pad = (0, 1, 0, 1)
             x = torch.nn.functional.pad(x, pad, mode="constant", value=0)
@@ -255,6 +309,10 @@ class Downsample(nn.Module):
 
 
 class ResnetBlock(nn.Module):
+    """
+    Residual Convolution Block
+    """
+
     def __init__(
         self,
         *,
@@ -292,6 +350,13 @@ class ResnetBlock(nn.Module):
                 )
 
     def forward(self, x: torch.Tensor, temb: torch.Tensor) -> torch.Tensor:
+        """
+        Pass image through residual block
+
+        :param x: input image
+        :param temb: temb
+        :return: output after residual connection
+        """
         h = x
         h = self.norm1(h)
         h = nonlinearity(h)
@@ -315,6 +380,10 @@ class ResnetBlock(nn.Module):
 
 
 class AttnBlock(nn.Module):
+    """
+    Self-Attention Block with Conv2D
+    """
+
     def __init__(self, in_channels: int) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -334,6 +403,12 @@ class AttnBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute attention values for image
+
+        :param x: input image
+        :return: image plus attention values
+        """
         h_ = x
         h_ = self.norm(h_)
         q = self.q(h_)
@@ -352,7 +427,8 @@ class AttnBlock(nn.Module):
         # attend to values
         v = v.reshape(b, c, h * w)
         w_ = w_.permute(0, 2, 1)  # b,hw,hw (first hw of k, second of q)
-        h_ = torch.bmm(v, w_)  # b, c,hw (hw of q) h_[b,c,j] = sum_i v[b,c,i] w_[b,i,j]
+        # b, c,hw (hw of q) h_[b,c,j] = sum_i v[b,c,i] w_[b,i,j]
+        h_ = torch.bmm(v, w_)
         h_ = h_.reshape(b, c, h, w)
 
         h_ = self.proj_out(h_)
