@@ -1,6 +1,9 @@
 import torch
+from torch import nn
 import torch.nn.functional as F
 from typing import Tuple
+
+from mask_schedule import get_mask
 
 
 def get_confidence(token_dist: torch.Tensor, temp: float = 0.7) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -20,3 +23,33 @@ def get_confidence(token_dist: torch.Tensor, temp: float = 0.7) -> Tuple[torch.T
     conf_vals = prob_dist[sampled_tokens]
 
     return conf_vals, sampled_tokens
+
+
+def gen_image(
+    input_seq: torch.Tensor,
+    model: nn.Module,
+    total_iterations: int,
+    total_tokens: int,
+    mask_token_id: int
+) -> torch.Tensor:
+    """
+    Generate tokens for a single image
+
+    :param input_seq: transformer input sequence
+    :param model: st-transformer model
+    :param total_iterations: max number of iterations
+    :param total_tokens: total tokens in one image
+    :param mask_token_id: mask token id
+    :return: image tokens
+    """
+    for iteration in range(total_iterations):
+        model_pred = model(input_seq)
+        # sample tokens and get conf scores
+        conf_vals, tokens = get_confidence(model_pred)
+        # next iteration mask
+        mask = get_mask(iteration, total_iterations, total_tokens, conf_vals)
+
+        # update sequence with predicted tokens
+        input_seq[:, -total_tokens] = torch.where(mask ==
+                                                  1, mask_token_id, tokens)
+    return input_seq
