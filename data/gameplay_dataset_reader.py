@@ -1,12 +1,11 @@
 import os
-import random
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict,  Tuple
 
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import Dataset
 from torchvision import transforms
 
 

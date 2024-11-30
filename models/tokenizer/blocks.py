@@ -134,7 +134,6 @@ class Decoder(nn.Module):
         self.num_resolutions = len(config.ch_mult)
 
         # compute in_ch_mult, block_in and curr_res at lowest res
-        in_ch_mult = (1,) + tuple(config.ch_mult)
         block_in = config.ch * config.ch_mult[self.num_resolutions - 1]
         curr_res = config.resolution // 2 ** (self.num_resolutions - 1)
         print(
