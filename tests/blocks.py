@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 # Import the previously defined blocks
-from models.st_transformer import LayerNorm, FeedForward, Attention
+from models.st_transformer import LayerNorm, FeedForward, Attention, PredictionHead
 
 
 class TestLayerNorm:
@@ -107,6 +107,82 @@ class TestFeedForward:
         assert not torch.allclose(output, x)
 
 
+class TestPredictionHead:
+    def test_initialization(self):
+        """Test PredictionHead initialization"""
+        # Without softmax
+        pred_head1 = PredictionHead(
+            dim=512, vocab_size=10000, apply_softmax=False)
+        assert pred_head1.projection.in_features == 512
+        assert pred_head1.projection.out_features == 10000
+        assert pred_head1.apply_softmax is False
+
+        # With softmax
+        pred_head2 = PredictionHead(
+            dim=512, vocab_size=10000, apply_softmax=True)
+        assert pred_head2.apply_softmax is True
+
+    def test_forward_without_softmax(self):
+        """Test forward pass without softmax"""
+        pred_head = PredictionHead(
+            dim=512, vocab_size=10000, apply_softmax=False)
+
+        # Create random input
+        x = torch.randn(2, 10, 512)
+        output = pred_head(x)
+
+        # Check output shape
+        assert output.shape == (2, 10, 10000)
+
+        # Check output is raw logits (not probabilities)
+        assert not torch.all(output >= 0) and not torch.all(output <= 1)
+
+    def test_forward_with_softmax(self):
+        """Test forward pass with softmax"""
+        pred_head = PredictionHead(
+            dim=512, vocab_size=10000, apply_softmax=True)
+
+        # Create random input
+        x = torch.randn(2, 10, 512)
+        output = pred_head(x)
+
+        # Check output shape
+        assert output.shape == (2, 10, 10000)
+
+        # Check softmax properties
+        # 1. All values should be between 0 and 1
+        assert torch.all(output >= 0) and torch.all(output <= 1)
+
+        # 2. Probabilities along last dimension should sum to 1
+        prob_sums = output.sum(dim=-1)
+        np.testing.assert_almost_equal(
+            prob_sums.detach().numpy(),
+            np.ones((2, 10)),
+            decimal=6
+        )
+
+    def test_softmax_temperature(self):
+        """Test temperature scaling in softmax"""
+        pred_head = PredictionHead(
+            dim=512, vocab_size=10000, apply_softmax=True)
+
+        # Create random input
+        x = torch.randn(2, 10, 512)
+
+        # Different temperature values
+        output_default = pred_head(x)
+        output_low_temp = pred_head(x, temperature=0.1)
+        output_high_temp = pred_head(x, temperature=10.0)
+
+        # Check shape consistency
+        assert output_default.shape == output_low_temp.shape == output_high_temp.shape
+
+        # Low temperature should make distribution more peaked
+        # High temperature should make distribution more uniform
+        assert torch.max(output_low_temp) > torch.max(output_default)
+        assert torch.max(output_high_temp) < torch.max(output_default)
+
+
 class TestAttention:
     def test_initialization(self):
         """Test Attention block initialization"""
@@ -147,6 +223,30 @@ def test_attention_configurations(dim, num_heads):
     x = torch.randn(2, 10, dim)
     output = attn(x)
     assert output.shape == x.shape
+
+# Parametrized tests for different configurations
+
+
+@pytest.mark.parametrize("dim", [256, 512, 1024])
+@pytest.mark.parametrize("vocab_size", [5000, 10000, 20000])
+@pytest.mark.parametrize("apply_softmax", [True, False])
+def test_prediction_head_configurations(dim, vocab_size, apply_softmax):
+    """Test PredictionHead with different configurations"""
+    pred_head = PredictionHead(
+        dim=dim, vocab_size=vocab_size, apply_softmax=apply_softmax)
+
+    x = torch.randn(2, 10, dim)
+    output = pred_head(x)
+
+    assert output.shape == (2, 10, vocab_size)
+
+    if apply_softmax:
+        prob_sums = output.sum(dim=-1)
+        np.testing.assert_almost_equal(
+            prob_sums.detach().numpy(),
+            np.ones((2, 10)),
+            decimal=6
+        )
 
 
 if __name__ == "__main__":

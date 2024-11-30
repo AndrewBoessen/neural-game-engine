@@ -98,6 +98,52 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 
+class PredictionHead(nn.Module):
+    """
+    Prediction Head for transformers with optional softmax application
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        vocab_size: int,
+        apply_softmax: bool = False
+    ):
+        """
+        Initialize Prediction Head
+        :param dim: Input dimension
+        :param vocab_size: Size of vocabulary/output space
+        :param apply_softmax: Whether to apply softmax to output
+        """
+        super().__init__()
+
+        # Linear projection to vocabulary size
+        self.projection = nn.Linear(dim, vocab_size)
+
+        # Softmax flag
+        self.apply_softmax = apply_softmax
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        temperature: float = 1.0
+    ) -> torch.Tensor:
+        """
+        Apply prediction projection
+        :param x: Input tensor of shape (B, L, dim)
+        :param temperature: Temperature for softmax scaling (only used if apply_softmax=True)
+        :return: Logits or probabilities of shape (B, L, vocab_size)
+        """
+        # Project to vocabulary size
+        logits = self.projection(x)
+
+        # Optional softmax application with temperature
+        if self.apply_softmax:
+            return F.softmax(logits / temperature, dim=-1)
+
+        return logits
+
+
 class Attention(nn.Module):
     """
     Multihead Self Attention
