@@ -136,10 +136,6 @@ class Decoder(nn.Module):
         # compute in_ch_mult, block_in and curr_res at lowest res
         block_in = config.ch * config.ch_mult[self.num_resolutions - 1]
         curr_res = config.resolution // 2 ** (self.num_resolutions - 1)
-        print(
-            f"Tokenizer : shape of latent is {
-                config.z_channels, curr_res, curr_res}."
-        )
 
         # z to block_in
         self.conv_in = torch.nn.Conv2d(
