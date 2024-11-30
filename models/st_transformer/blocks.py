@@ -7,6 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch.nn.attention import sdpa_kernel, SDPBackend
 import einops
+from typing import Tuple
 
 
 class LayerNorm(nn.Module):
@@ -16,7 +17,7 @@ class LayerNorm(nn.Module):
 
     def __init__(
         self,
-        normalized_shape: int,
+        normalized_shape: int | Tuple,
         eps: float = 1e-5,
         elementwise_affine: bool = True
     ):
