@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 from typing import Tuple
 
-from mask_schedule import get_mask
+from models.maskgit import get_mask
 
 
 def get_confidence(token_dist: torch.Tensor, temp: float = 0.7) -> Tuple[torch.Tensor, torch.Tensor]:
