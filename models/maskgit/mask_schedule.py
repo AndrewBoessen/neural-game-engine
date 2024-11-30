@@ -21,20 +21,20 @@ def get_mask(
     :raises ValueError: invalid schedule function
     """
     if schedule == "cosine":
-        policy_func = np.cos
+        def policy_func(x): return np.cos(x * np.pi / 2)
     elif schedule == "linear":
         def policy_func(x): return 1 - x
     else:
         raise ValueError(f"Invalid schedule function: {schedule}")
 
     # number of tokens to mask at current iteration
-    n: int = np.ceil(policy_func(iteration/total_iterations)
-                     * total_tokens).astype(np.int32)
+    n: int = np.floor(policy_func(iteration/total_iterations)
+                      * total_tokens).astype(np.int32)
 
     # confidence value for top nth token
-    confidence_threshold, _ = torch.kthvalue(token_confidence, n)
+    confidence_threshold, _ = torch.kthvalue(
+        token_confidence, n) if n > 0 else (-1, None)
 
     # mask out all tokens with confidence below threshold
-    assert confidence_threshold.shape[0] == token_confidence.shape[0], "confidence and threshold values dont match"
-    mask = (token_confidence < confidence_threshold).float()
+    mask = (token_confidence <= confidence_threshold).float()
     return mask
