@@ -2,7 +2,162 @@ import torch
 import pytest
 
 # Import the previously defined blocks
-from models.st_transformer import SpatioTemporalLayer, LayerNorm, FeedForward, SpatialBlock, TemporalBlock
+from models.st_transformer import SpatioTemporalTransformer, SpatioTemporalLayer, LayerNorm, FeedForward, SpatialBlock, TemporalBlock, PredictionHead
+
+
+class TestSpatioTemporalTransformer:
+    @pytest.fixture
+    def transformer_model(self):
+        """
+        Fixture to create a standard SpatioTemporalTransformer for testing
+        """
+        return SpatioTemporalTransformer(
+            dim=64,               # model dimension
+            num_heads=4,          # 4 attention heads
+            num_layers=2,         # 2 transformer layers
+            context_length=5,     # 5 context steps
+            tokens_per_image=10,  # 10 tokens per image
+            vocab_size=1000,      # 1000 vocab tokens
+            num_actions=20,       # 20 possible actions
+            mask_token=0,         # 0 as mask token
+            attn_drop=0.1,        # 10% attention dropout
+            proj_drop=0.1,        # 10% projection dropout
+            ffn_drop=0.1          # 10% feed-forward dropout
+        )
+
+    def test_initialization(self, transformer_model):
+        """
+        Test that the SpatioTemporalTransformer is initialized correctly
+        """
+        assert transformer_model.dim == 64
+        assert transformer_model.num_heads == 4
+        assert transformer_model.num_layers == 2
+        assert transformer_model.context_length == 5
+        assert transformer_model.tokens_per_image == 10
+        assert transformer_model.vocab_size == 1000
+        assert transformer_model.num_actions == 20
+        assert transformer_model.mask_token == 0
+
+    def test_embedding_layers(self, transformer_model):
+        """
+        Test embedding layers initialization
+        """
+        # Image embedding
+        assert isinstance(transformer_model.image_embedding,
+                          torch.nn.Embedding)
+        # vocab_size + 1 for mask
+        assert transformer_model.image_embedding.num_embeddings == 1001
+        assert transformer_model.image_embedding.embedding_dim == 64
+
+        # Action embedding
+        assert isinstance(transformer_model.action_embedding,
+                          torch.nn.Embedding)
+        assert transformer_model.action_embedding.num_embeddings == 20
+        assert transformer_model.action_embedding.embedding_dim == 64
+
+        # Spatial embedding
+        assert isinstance(transformer_model.spatial_embedding,
+                          torch.nn.Embedding)
+        assert transformer_model.spatial_embedding.num_embeddings == 10
+        assert transformer_model.spatial_embedding.embedding_dim == 64
+
+        # Temporal embedding
+        assert isinstance(
+            transformer_model.temporal_embedding, torch.nn.Embedding)
+        assert transformer_model.temporal_embedding.num_embeddings == 5
+        assert transformer_model.temporal_embedding.embedding_dim == 64
+
+    def test_layers(self, transformer_model):
+        """
+        Test transformer layers
+        """
+        assert len(transformer_model.layers) == 2
+        for layer in transformer_model.layers:
+            assert isinstance(layer, SpatioTemporalLayer)
+
+    def test_prediction_head(self, transformer_model):
+        """
+        Test prediction head
+        """
+        assert isinstance(transformer_model.prediction_head, PredictionHead)
+        assert transformer_model.prediction_head.projection.in_features == 64
+        assert transformer_model.prediction_head.projection.out_features == 1000
+
+    def test_forward_shape(self, transformer_model):
+        """
+        Test forward pass shape
+        """
+        # Create input tensor: batch_size x sequence_length
+        # Sequence length is (tokens_per_image + 1) * context_length
+        batch_size = 4
+        # 11 tokens per step * 5 steps
+        input_tokens = torch.randint(0, 20, (batch_size, 55))
+
+        # Add some mask tokens
+        input_tokens[0, 10] = 0  # mask a token in first batch
+
+        # Forward pass
+        output = transformer_model(input_tokens)
+
+        # Check output shape: batch_size x tokens_per_image x vocab_size
+        assert output.shape == (batch_size, 10, 1000)
+
+    def test_mask_token_prediction(self, transformer_model):
+        """
+        Test mask token prediction functionality
+        """
+        batch_size = 4
+        input_tokens = torch.randint(0, 20, (batch_size, 55))
+
+        # Explicitly set some tokens as mask tokens
+        mask_positions = torch.randint(1, 10, (batch_size,))
+        for i, pos in enumerate(mask_positions):
+            input_tokens[i, 11 * 4 + pos] = 0.0  # mask token in last image
+
+        # Forward pass
+        output = transformer_model(input_tokens)
+
+        # Verify mask token positions have non-zero logits
+        for i, pos in enumerate(mask_positions):
+            mask_token_pred = output[i, pos]
+            assert not torch.all(mask_token_pred == -float('inf'))
+
+    def test_device_compatibility(self, transformer_model):
+        """
+        Test model works with different device configurations
+        """
+        # Test CPU
+        input_tokens_cpu = torch.randint(0, 20, (4, 55))
+        output_cpu = transformer_model(input_tokens_cpu)
+        assert output_cpu.shape == (4, 10, 1000)
+
+        # Test GPU if available
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+            transformer_model_gpu = transformer_model.to(device)
+            input_tokens_gpu = input_tokens_cpu.to(device)
+
+            output_gpu = transformer_model_gpu(input_tokens_gpu)
+            assert output_gpu.shape == (4, 10, 1000)
+            assert output_gpu.device.type == 'cuda'
+
+    def test_no_grad_modification(self, transformer_model):
+        """
+        Test that the forward pass does not modify input gradient requirement
+        """
+        input_tokens = torch.randint(0, 20, (4, 55)).to(torch.float32)
+
+        input_tokens.requires_grad = True
+
+        # Forward pass
+        output = transformer_model(input_tokens)
+
+        # Dummy loss to test backpropagation
+        loss = output.sum()
+        loss.backward()
+
+        # Ensure input still requires gradient
+        assert input_tokens.requires_grad
 
 
 class TestSpatioTemporalLayer:

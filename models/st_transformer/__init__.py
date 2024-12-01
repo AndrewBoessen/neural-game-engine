@@ -1,5 +1,5 @@
 from .blocks import LayerNorm, FeedForward, Attention, PredictionHead, SpatialBlock, TemporalBlock
-from .st_transformer import SpatioTemporalLayer
+from .st_transformer import SpatioTemporalLayer, SpatioTemporalTransformer
 
 __version__ = "0.1.0"
 
@@ -10,5 +10,6 @@ __all__ = [
     "PredictionHead",
     "SpatialBlock",
     "TemporalBlock",
-    "SpatioTemporalLayer"
+    "SpatioTemporalLayer",
+    "SpatioTemporalTransformer"
 ]
