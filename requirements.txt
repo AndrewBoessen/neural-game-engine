@@ -11,3 +11,4 @@ omegaconf
 dataset
 einops
 requests
+pytest

@@ -92,10 +92,10 @@ class FeedForward(nn.Module):
 
     def forward(self, x: torch.Tensor):
         """
-        Apply Feed-Forward Network
+        Apply Feed-Forward Network with Residual Connection
         :param x input tensor
         """
-        return self.net(x)
+        return x + self.net(x)
 
 
 class PredictionHead(nn.Module):
