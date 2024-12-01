@@ -5,7 +5,6 @@ ST-Transformer Blocks
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch.nn.attention import sdpa_kernel, SDPBackend
 import einops
 from einops.layers.torch import Rearrange
 from typing import Tuple
@@ -191,11 +190,9 @@ class Attention(nn.Module):
         # Split QKV embeddings into heads
         q, k, v = einops.rearrange(
             qkv, 'B L (K H D) -> K B H L D', K=3, H=self.num_heads).float()
-        # use flash attention
-        with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
-            # MHSA with optional mask and dropout
-            x = F.scaled_dot_product_attention(
-                q, k, v, dropout_p=self.attn_drop, is_causal=self.mask, scale=self.scale)
+        # MHSA with optional mask and dropout
+        x = F.scaled_dot_product_attention(
+            q, k, v, dropout_p=self.attn_drop, is_causal=self.mask, scale=self.scale)
 
         # concatonate heads
         x = einops.rearrange(x, 'B H L D -> B L (H D)')  # B L E
@@ -209,7 +206,14 @@ class SpatialBlock(nn.Module):
     Spatial Attention Block
     """
 
-    def __init__(self, dim: int, tokens_per_image: int, num_heads: int, attn_drop: float = 0., proj_drop: float = 0.):
+    def __init__(
+            self,
+            dim: int,
+            tokens_per_image: int,
+            num_heads: int,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.
+    ):
         """
         Initialize Spatial Block Params
 
@@ -229,13 +233,10 @@ class SpatialBlock(nn.Module):
         self.block = nn.Sequential(
             # split spatial dimension
             Rearrange('B (T L) D -> (B T) L D',
-                      T=-1, L=self.num_tokens),
-            LayerNorm(self.num_tokens),
+                      L=self.num_tokens),
+            LayerNorm(self.dim),
             Attention(self.dim, self.num_heads, attn_drop=self.attn_drop,
                       proj_drop=self.proj_drop, mask=False),
-            # concat outputs
-            Rearrange('(B T) L D -> B (T L) D',
-                      T=-1, L=self.num_tokens)
         )
 
     def forward(self, x: torch.Tensor):
@@ -244,5 +245,11 @@ class SpatialBlock(nn.Module):
 
         :param x: image sequence tensor
         """
-        # compute self attention and add residual connection
-        return x + self.block(x)
+        _, N, _ = x.shape
+        # compute self attention
+        attn_out = self.block(x)
+        # concat outputs
+        attn_out = einops.rearrange(attn_out, '(B T) L D -> B (T L) D',
+                                    L=self.num_tokens, T=N//self.num_tokens)
+        # add residual connection
+        return x + attn_out
