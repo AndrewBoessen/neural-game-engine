@@ -201,3 +201,47 @@ class Attention(nn.Module):
         x = self.proj(x)  # output projection
         x = self.proj_drop(x)  # output dropout
         return x
+
+
+class SpatialBlock(nn.Module):
+    """
+    Spatial Attention Block
+    """
+
+    def __init__(self, dim: int, tokens_per_image: int, num_heads: int, attn_drop: float = 0., proj_drop: float = 0.):
+        """
+        Initialize Spatial Block Params
+
+        :param dim: model dimension
+        :param tokens_per_image: number of tokens per image
+        :param num_heads: number of attention heads
+        :param attn_drop: attention dropout rate
+        :param proj_drop: output projection dropout rate
+        """
+        super().__init__()
+        self.dim = dim
+        self.num_tokens = tokens_per_image + 1  # image plus one action token
+        self.num_heads = num_heads
+        self.attn_drop = attn_drop
+        self.proj_drop = proj_drop
+
+        self.block = nn.Sequential(
+            LayerNorm(self.num_tokens),
+            Attention(self.dim, self.num_heads, attn_drop=self.attn_drop,
+                      proj_drop=self.proj_drop, mask=False)
+        )
+
+    def forward(self, x: torch.Tensor):
+        """
+        Attend over spatial dependencies
+
+        :param x: image sequence tensor
+        """
+        # split spatial dimension
+        x = einops.rearrange(x, 'B (T L) D -> (B T) L D',
+                             T=-1, L=self.num_tokens)
+        x = self.block(x)
+        # concat outputs
+        x = einops.rearrange(x, '(B T) L D -> B (T L) D',
+                             T=-1, L=self.num_tokens)
+        return x
