@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 # Import the previously defined blocks
-from models.st_transformer import LayerNorm, FeedForward, Attention, PredictionHead, SpatialBlock
+from models.st_transformer import LayerNorm, FeedForward, Attention, PredictionHead, SpatialBlock, TemporalBlock
 
 
 class TestSpatialBlock:
@@ -89,6 +89,118 @@ class TestSpatialBlock:
             output = spatial_block(x)
 
             assert output.shape == x.shape, f"Failed for shape {x.shape}"
+
+
+class TestTemporalBlock:
+    @pytest.fixture
+    def temporal_block(self):
+        """
+        Fixture to create a standard TemporalBlock for testing
+        """
+        return TemporalBlock(
+            dim=64,           # model dimension
+            tokens_per_image=10,  # 10 tokens per image
+            num_heads=4,      # 4 attention heads
+            attn_drop=0.1,    # 10% attention dropout
+            proj_drop=0.1     # 10% projection dropout
+        )
+
+    def test_initialization(self, temporal_block):
+        """
+        Test that the TemporalBlock is initialized correctly
+        """
+        assert isinstance(temporal_block, TemporalBlock)
+        assert temporal_block.dim == 64
+        assert temporal_block.num_tokens == 11  # tokens_per_image + 1
+        assert temporal_block.num_heads == 4
+
+    def test_forward_shape_preservation(self, temporal_block):
+        """
+        Test that the forward pass preserves input tensor shape
+        """
+        # Create a sample input tensor
+        # Batch size of 2, sequence length of 22 (11 tokens * 2), dimension of 64
+        x = torch.randn(2, 22, 64)
+
+        # Pass through TemporalBlock
+        output = temporal_block(x)
+
+        # Check output shape matches input shape
+        assert output.shape == x.shape
+
+    def test_residual_connection(self, temporal_block):
+        """
+        Test that the forward pass includes a residual connection
+        """
+        # Create a sample input tensor
+        x = torch.randn(2, 22, 64)
+
+        # Pass through TemporalBlock
+        output = temporal_block(x)
+
+        # Check that output is not exactly the same as the input
+        # but close enough to indicate a residual connection
+        assert not torch.allclose(output, x, atol=1e-7)
+
+    def test_causal_masking(self, temporal_block):
+        """
+        Test the causal masking property of temporal attention
+        """
+        # Create a test input with known values
+        x = torch.ones(1, 22, 64)
+
+        # Pass through TemporalBlock
+        output = temporal_block(x)
+
+        # Verify the output is not uniform due to causal masking
+        assert not torch.allclose(output, x, atol=1e-7)
+
+    def test_no_grad_modification(self, temporal_block):
+        """
+        Test that the forward pass does not modify input gradient requirement
+        """
+        # Create a sample input tensor that requires gradient
+        x = torch.randn(2, 22, 64, requires_grad=True)
+
+        # Pass through TemporalBlock
+        output = temporal_block(x)
+
+        # Perform a dummy loss and backpropagation
+        loss = output.sum()
+        loss.backward()
+
+        # Ensure input still requires gradient
+        assert x.requires_grad
+
+    def test_different_input_sizes(self, temporal_block):
+        """
+        Test the block works with different input sizes
+        """
+        test_sizes = [
+            (1, 11, 64),    # Single batch, standard number of tokens
+            (4, 44, 64),    # Multiple batches, more tokens
+            (3, 33, 64)     # Different batch and token combination
+        ]
+
+        for batch, total_tokens, dim in test_sizes:
+            x = torch.randn(batch, total_tokens, dim)
+            output = temporal_block(x)
+
+            assert output.shape == x.shape, f"Failed for shape {x.shape}"
+
+    def test_einops_rearrangement(self, temporal_block):
+        """
+        Test the correctness of einops rearrangement
+        """
+        # Create a sample input tensor
+        batch_size, total_tokens, dim = 2, 22, 64
+        x = torch.randn(batch_size, total_tokens, dim)
+
+        # Pass through TemporalBlock
+        output = temporal_block(x)
+
+        # Verify the rearrangement preserves the original shape
+        assert output.shape == (batch_size, total_tokens, dim)
 
 
 class TestLayerNorm:

@@ -253,3 +253,58 @@ class SpatialBlock(nn.Module):
                                     L=self.num_tokens, T=N//self.num_tokens)
         # add residual connection
         return x + attn_out
+
+
+class TemporalBlock(nn.Module):
+    """
+    Temporal Attention Block
+    """
+
+    def __init__(
+            self,
+            dim: int,
+            tokens_per_image: int,
+            num_heads: int,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.
+    ):
+        """
+        Initialize Temporal Block Params
+
+        :param dim: model dimension
+        :param tokens_per_image: number of tokens per image
+        :param num_heads: number of attention heads
+        :param attn_drop: attention dropout rate
+        :param proj_drop: output projection dropout rate
+        """
+        super().__init__()
+        self.dim = dim
+        self.num_tokens = tokens_per_image + 1  # image plus one action token
+        self.num_heads = num_heads
+        self.attn_drop = attn_drop
+        self.proj_drop = proj_drop
+
+        self.block = nn.Sequential(
+            # split spatial dimension
+            Rearrange('B (T L) D -> (B L) T D',
+                      L=self.num_tokens),
+            LayerNorm(self.dim),
+            # attention with causal mask
+            Attention(self.dim, self.num_heads, attn_drop=self.attn_drop,
+                      proj_drop=self.proj_drop, mask=True),
+        )
+
+    def forward(self, x: torch.Tensor):
+        """
+        Attend over temporal dependencies
+
+        :param x: image sequence tensor
+        """
+        _, N, _ = x.shape
+        # compute self attention
+        attn_out = self.block(x)
+        # concat outputs
+        attn_out = einops.rearrange(attn_out, '(B L) T D -> B (T L) D',
+                                    L=self.num_tokens, T=N//self.num_tokens)
+        # add residual connection
+        return x + attn_out

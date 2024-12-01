@@ -1,4 +1,4 @@
-from .blocks import LayerNorm, FeedForward, Attention, PredictionHead, SpatialBlock
+from .blocks import LayerNorm, FeedForward, Attention, PredictionHead, SpatialBlock, TemporalBlock
 
 __version__ = "0.1.0"
 
@@ -7,5 +7,6 @@ __all__ = [
     "FeedForward",
     "Attention",
     "PredictionHead",
-    "SpatialBlock"
+    "SpatialBlock",
+    "TemporalBlock"
 ]
