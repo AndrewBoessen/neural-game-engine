@@ -1,7 +1,8 @@
 import torch
 from torch import nn
 
-from models.st_transformer import LayerNorm, TemporalBlock, SpatialBlock, FeedForward, PredictionHead
+from models.st_transformer import (FeedForward, LayerNorm, PredictionHead,
+                                   SpatialBlock, TemporalBlock)
 
 
 class SpatioTemporalLayer(nn.Module):
@@ -14,9 +15,9 @@ class SpatioTemporalLayer(nn.Module):
         dim: int,
         num_heads: int,
         tokens_per_image: int,
-        attn_drop: float = 0.,
-        proj_drop: float = 0.,
-        ffn_drop: float = 0.
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        ffn_drop: float = 0.0,
     ):
         """
         Initialize Layer Params
@@ -52,7 +53,7 @@ class SpatioTemporalLayer(nn.Module):
                 proj_drop=self.proj_drop,
             ),
             LayerNorm(self.dim),
-            FeedForward(self.dim, dropout=self.ffn_drop)
+            FeedForward(self.dim, dropout=self.ffn_drop),
         )
 
     def forward(self, x: torch.Tensor):
@@ -79,9 +80,9 @@ class SpatioTemporalTransformer(nn.Module):
         vocab_size: int,
         num_actions: int,
         mask_token: int,
-        attn_drop: float = 0.,
-        proj_drop: float = 0.,
-        ffn_drop: float = 0.
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        ffn_drop: float = 0.0,
     ):
         """
         Initialize Model Params
@@ -113,7 +114,8 @@ class SpatioTemporalTransformer(nn.Module):
 
         # Token Embeddings
         self.image_embedding = nn.Embedding(
-            self.vocab_size + 1, self.dim)  # plus one for mask token
+            self.vocab_size + 1, self.dim
+        )  # plus one for mask token
         self.action_embedding = nn.Embedding(self.num_actions, self.dim)
 
         # Positional Embedings
@@ -122,14 +124,17 @@ class SpatioTemporalTransformer(nn.Module):
 
         # ST Layers
         self.layers = nn.ModuleList(
-            [SpatioTemporalLayer(
-                self.dim,
-                self.num_heads,
-                self.tokens_per_image,
-                self.attn_drop,
-                self.proj_drop,
-                self.ffn_drop,
-            ) for _ in range(self.num_layers)]
+            [
+                SpatioTemporalLayer(
+                    self.dim,
+                    self.num_heads,
+                    self.tokens_per_image,
+                    self.attn_drop,
+                    self.proj_drop,
+                    self.ffn_drop,
+                )
+                for _ in range(self.num_layers)
+            ]
         )
 
         # Prediction MLP Head
@@ -142,43 +147,47 @@ class SpatioTemporalTransformer(nn.Module):
         :param x: input tokens
         """
         # Embed images and actions
-        embeddings = torch.zeros((x.shape[0], x.shape[1], self.dim))
+        embeddings = torch.zeros((x.shape[0], x.shape[1], self.dim), device=x.device)
         for i in range(x.shape[1]):
-            if (i % (self.tokens_per_image + 1) == 0):
+            if i % (self.tokens_per_image + 1) == 0:
                 action_tokens = x[:, i]
-                embeddings[:, i, :self.dim] = self.action_embedding(
-                    action_tokens.to(torch.int32))
+                embeddings[:, i, : self.dim] = self.action_embedding(
+                    action_tokens.to(torch.int32)
+                )
                 # Only apply temporal positional embedding to action
-                embeddings[:, i, :self.dim] += self.temporal_embedding(
-                    torch.tensor(i // (self.tokens_per_image+1)))
+                embeddings[:, i, : self.dim] += self.temporal_embedding(
+                    torch.tensor(i // (self.tokens_per_image + 1), device=x.device)
+                )
             else:
                 image_tokens = x[:, i]
-                embeddings[:, i, :self.dim] = self.image_embedding(
-                    image_tokens.to(torch.int32))
+                embeddings[:, i, : self.dim] = self.image_embedding(
+                    image_tokens.to(torch.int32)
+                )
                 # apply both spatial and temporal positional embeddings to image
-                embeddings[:, i, :self.dim] += self.temporal_embedding(
-                    torch.tensor(i // (self.tokens_per_image+1)))
-                embeddings[:, i, :self.dim] += self.spatial_embedding(
-                    torch.tensor(i % (self.tokens_per_image+1) - 1))
+                embeddings[:, i, : self.dim] += self.temporal_embedding(
+                    torch.tensor(i // (self.tokens_per_image + 1), device=x.device)
+                )
+                embeddings[:, i, : self.dim] += self.spatial_embedding(
+                    torch.tensor(i % (self.tokens_per_image + 1) - 1, device=x.device)
+                )
 
         # Attention Layers
         for layer in self.layers:
             embeddings = layer(embeddings)
 
         # Tokens for current image in sequence
-        tokens_to_predict = embeddings[:, -self.tokens_per_image:, :]
+        tokens_to_predict = embeddings[:, -self.tokens_per_image :, :]
         token_pred = self.prediction_head(tokens_to_predict)
 
         # Replace unmasked tokens with one hot encoding
-        input_tokens = x[:, -self.tokens_per_image:]
+        input_tokens = x[:, -self.tokens_per_image :]
 
         # Create a one-hot encoding for input tokens
         one_hot_tokens = torch.zeros_like(token_pred)
-        one_hot_tokens.scatter_(
-            2, input_tokens.unsqueeze(2).to(dtype=torch.int64), 1.0)
+        one_hot_tokens.scatter_(2, input_tokens.unsqueeze(2).to(dtype=torch.int64), 1.0)
 
         # Create a mask for tokens that should be predicted (masked tokens)
-        mask = (input_tokens == self.mask_token)
+        mask = input_tokens == self.mask_token
 
         # Replace non-masked tokens with their one-hot encoding
         # Convert one hot encoding to softmax mask (-inf)
@@ -188,8 +197,8 @@ class SpatioTemporalTransformer(nn.Module):
             torch.where(
                 one_hot_tokens == 1.0,
                 one_hot_tokens,
-                torch.tensor(-float('inf'), device=token_pred.device)
-            )
+                torch.tensor(-float("inf"), device=token_pred.device),
+            ),
         )
 
         return token_pred
