@@ -1,0 +1,50 @@
+# Training Configuration
+
+# Data Loading Parameters
+batch_size: 4  # Number of samples per training batch
+num_workers: 4  # Number of subprocesses to use for data loading
+
+# Optimization Parameters
+optimizer:
+  name: "adam"  # Optimizer type (Adam)
+  learning_rate: 0.0001  # Initial learning rate
+  min_lr: 0.000001  # Minimum learning rate for decay
+  weight_decay: 1.0e-5  # L2 regularization strength
+
+  # Adam-specific parameters
+  betas:
+    beta1: 0.9   # First-order momentum
+    beta2: 0.999 # Second-order momentum
+
+# Training Hyperparameters
+training:
+  num_epochs: 100  # Total number of training epochs
+  log_interval: 100  # Frequency of logging training metrics
+  gradient_clip: 1.0  # Gradient clipping threshold
+  mixed_precision: true  # Use mixed precision training
+  seed: 42  # Random seed for reproducibility
+
+# Learning Rate Scheduling
+lr_scheduler:
+  name: "cosine_annealing"  # Learning rate scheduling strategy
+  warmup_epochs: 5  # Number of warmup epochs
+  warmup_start_lr: 1.0e-6  # Initial warmup learning rate
+
+# Validation and Checkpointing
+validation:
+  frequency: 1  # Validate every N epochs
+  save_best_only: true  # Only save the best performing model
+
+# Logging and Monitoring
+logging:
+  project_name: "game_transformer"
+  run_name: "training_run_v1"
+
+# Data Augmentation
+augmentation:
+  enabled: true
+  types:
+    - random_crop
+    - horizontal_flip
+    - color_jitter
+
