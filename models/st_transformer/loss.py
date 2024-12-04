@@ -2,7 +2,9 @@ import torch
 from torch import nn
 
 
-def MaskedCrossEntropyLoss(logits: torch.Tensor, labels: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+def MaskedCrossEntropyLoss(
+    logits: torch.Tensor, labels: torch.Tensor, mask: torch.Tensor
+) -> torch.Tensor:
     """
     Cross Entropy Loss for Masked Transformer Model
 
@@ -14,17 +16,19 @@ def MaskedCrossEntropyLoss(logits: torch.Tensor, labels: torch.Tensor, mask: tor
 
     # Validate input shapes
     if labels.shape != mask.shape:
-        raise ValueError(f"Labels and mask must have same shape. Got {
-                         labels.shape} and {mask.shape}")
+        raise ValueError(
+            f"Labels and mask must have same shape. Got {labels.shape} and {mask.shape}"
+        )
 
     if logits.shape[:2] != labels.shape:
-        raise ValueError(f"Logits and labels must have matching batch and sequence dimensions. Got {
-                         logits.shape} and {labels.shape}")
+        raise ValueError(
+            f"Logits and labels must have matching dimensions. Got {logits.shape} and {labels.shape}"
+        )
 
     # Reshape logits and labels to calculate loss
     # logits: (batch_size * sequence_length, vocab_size)
     # labels: (batch_size * sequence_length)
-    loss_fct = nn.CrossEntropyLoss(reduction='none')
+    loss_fct = nn.CrossEntropyLoss(reduction="none")
 
     # Flatten the logits and labels
     flat_logits = logits.view(-1, logits.size(-1))
