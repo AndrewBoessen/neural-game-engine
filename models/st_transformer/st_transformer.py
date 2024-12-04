@@ -147,7 +147,8 @@ class SpatioTemporalTransformer(nn.Module):
         :param x: input tokens
         """
         # Embed images and actions
-        embeddings = torch.zeros((x.shape[0], x.shape[1], self.dim), device=x.device)
+        embeddings = torch.zeros(
+            (x.shape[0], x.shape[1], self.dim), device=x.device)
         for i in range(x.shape[1]):
             if i % (self.tokens_per_image + 1) == 0:
                 action_tokens = x[:, i]
@@ -156,7 +157,8 @@ class SpatioTemporalTransformer(nn.Module):
                 )
                 # Only apply temporal positional embedding to action
                 embeddings[:, i, : self.dim] += self.temporal_embedding(
-                    torch.tensor(i // (self.tokens_per_image + 1), device=x.device)
+                    torch.tensor(i // (self.tokens_per_image + 1),
+                                 device=x.device)
                 )
             else:
                 image_tokens = x[:, i]
@@ -165,10 +167,12 @@ class SpatioTemporalTransformer(nn.Module):
                 )
                 # apply both spatial and temporal positional embeddings to image
                 embeddings[:, i, : self.dim] += self.temporal_embedding(
-                    torch.tensor(i // (self.tokens_per_image + 1), device=x.device)
+                    torch.tensor(i // (self.tokens_per_image + 1),
+                                 device=x.device)
                 )
                 embeddings[:, i, : self.dim] += self.spatial_embedding(
-                    torch.tensor(i % (self.tokens_per_image + 1) - 1, device=x.device)
+                    torch.tensor(
+                        i % (self.tokens_per_image + 1) - 1, device=x.device)
                 )
 
         # Attention Layers
@@ -176,15 +180,16 @@ class SpatioTemporalTransformer(nn.Module):
             embeddings = layer(embeddings)
 
         # Tokens for current image in sequence
-        tokens_to_predict = embeddings[:, -self.tokens_per_image :, :]
+        tokens_to_predict = embeddings[:, -self.tokens_per_image:, :]
         token_pred = self.prediction_head(tokens_to_predict)
 
         # Replace unmasked tokens with one hot encoding
-        input_tokens = x[:, -self.tokens_per_image :]
+        input_tokens = x[:, -self.tokens_per_image:]
 
         # Create a one-hot encoding for input tokens
         one_hot_tokens = torch.zeros_like(token_pred)
-        one_hot_tokens.scatter_(2, input_tokens.unsqueeze(2).to(dtype=torch.int64), 1.0)
+        one_hot_tokens.scatter_(
+            2, input_tokens.unsqueeze(2).to(dtype=torch.int64), 1.0)
 
         # Create a mask for tokens that should be predicted (masked tokens)
         mask = input_tokens == self.mask_token

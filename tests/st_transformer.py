@@ -2,7 +2,142 @@ import torch
 import pytest
 
 # Import the previously defined blocks
-from models.st_transformer import SpatioTemporalTransformer, SpatioTemporalLayer, LayerNorm, FeedForward, SpatialBlock, TemporalBlock, PredictionHead
+from models.st_transformer import SpatioTemporalTransformer, SpatioTemporalLayer, LayerNorm, FeedForward, SpatialBlock, TemporalBlock, PredictionHead, MaskedCrossEntropyLoss
+
+
+class TestMaskedCrossEntropyLoss:
+    """
+    Comprehensive test suite for MaskedCrossEntropyLoss function
+    """
+
+    @pytest.fixture
+    def sample_inputs(self):
+        """
+        Fixture to provide common test input tensors
+        """
+        batch_size, seq_length, vocab_size = 2, 5, 10
+
+        # Random logits
+        logits = torch.randn(batch_size, seq_length, vocab_size)
+
+        # Random labels
+        labels = torch.randint(0, vocab_size, (batch_size, seq_length))
+
+        # Varied mask for different sequences
+        mask = torch.tensor([
+            [0, 1, 1, 0, 0],  # First sequence: 2nd and 3rd tokens masked
+            [1, 0, 0, 1, 0]   # Second sequence: 1st and 4th tokens masked
+        ], dtype=torch.bool)
+
+        return logits, labels, mask
+
+    def test_basic_functionality(self, sample_inputs):
+        """
+        Test basic functionality of MaskedCrossEntropyLoss
+        """
+        logits, labels, mask = sample_inputs
+
+        # Calculate loss
+        loss = MaskedCrossEntropyLoss(logits, labels, mask)
+
+        # Verify loss is not NaN and is a reasonable value
+        assert not torch.isnan(loss)
+        assert loss.item() > 0
+
+    def test_no_masked_tokens(self, sample_inputs):
+        """
+        Test scenario with no masked tokens
+        """
+        logits, labels, _ = sample_inputs
+
+        # Mask with all zeros (no masked tokens)
+        mask = torch.zeros_like(labels, dtype=torch.bool)
+
+        # Calculate loss
+        loss = MaskedCrossEntropyLoss(logits, labels, mask)
+
+        # Loss should be zero when no tokens are masked
+        assert loss.item() == 0.0
+
+    def test_all_tokens_masked(self, sample_inputs):
+        """
+        Test scenario with all tokens masked
+        """
+        logits, labels, _ = sample_inputs
+
+        # Mask with all ones (all tokens masked)
+        mask = torch.ones_like(labels, dtype=torch.bool)
+
+        # Calculate loss
+        loss = MaskedCrossEntropyLoss(logits, labels, mask)
+
+        # Verify loss is not NaN and is a reasonable value
+        assert not torch.isnan(loss)
+        assert loss.item() > 0
+
+    def test_shape_mismatch(self, sample_inputs):
+        """
+        Test error handling for tensor shape mismatches
+        """
+        logits, labels, _ = sample_inputs
+
+        # Create labels with incorrect shape
+        incorrect_labels = torch.randint(
+            0, logits.size(-1), (labels.size(0), labels.size(1) + 1))
+
+        # Mask with incorrect shape
+        mask = torch.ones_like(incorrect_labels, dtype=torch.bool)
+
+        # Should raise a ValueError due to shape mismatch
+        with pytest.raises(ValueError):
+            MaskedCrossEntropyLoss(logits, incorrect_labels, mask)
+
+    def test_numerical_stability(self):
+        """
+        Test numerical stability with extreme logit values
+        """
+
+        # Create logits with very large values
+        logits = torch.tensor([[
+            [1e10, -1e10, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1e10, -1e10, 0, 0, 0],
+            [0, 0, 1e10, -1e10, 0, 0, 0, 0, 0, 0]
+        ]], dtype=torch.float32)
+
+        labels = torch.tensor([[0, 5, 2]])
+        mask = torch.tensor([[1, 1, 1]])
+
+        # Calculate loss
+        loss = MaskedCrossEntropyLoss(logits, labels, mask)
+
+        # Verify loss is not NaN and is a reasonable value
+        assert not torch.isnan(loss)
+        assert loss.item() >= 0
+
+    def test_different_masking_patterns(self):
+        """
+        Test loss calculation with different masking patterns
+        """
+        batch_size, seq_length, vocab_size = 2, 5, 10
+
+        # Random logits
+        logits = torch.randn(batch_size, seq_length, vocab_size)
+
+        # Random labels
+        labels = torch.randint(0, vocab_size, (batch_size, seq_length))
+
+        # Varied mask with different patterns
+        mask = torch.tensor([
+            [0, 1, 1, 0, 0],  # First sequence: 2nd and 3rd tokens masked
+            [1, 0, 0, 1, 0]   # Second sequence: 1st and 4th tokens masked
+        ], dtype=torch.bool)
+
+        # Calculate loss
+        loss = MaskedCrossEntropyLoss(logits, labels, mask)
+
+        # Verify loss is not NaN and is a reasonable value
+        assert not torch.isnan(loss)
+        assert loss.item() > 0
 
 
 class TestSpatioTemporalTransformer:
