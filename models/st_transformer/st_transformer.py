@@ -181,13 +181,13 @@ class SpatioTemporalTransformer(nn.Module):
 
         # Tokens for current image in sequence
         tokens_to_predict = embeddings[:, -self.tokens_per_image:, :]
-        token_pred = self.prediction_head(tokens_to_predict)
+        logits = self.prediction_head(tokens_to_predict)
 
         # Replace unmasked tokens with one hot encoding
         input_tokens = x[:, -self.tokens_per_image:]
 
         # Create a one-hot encoding for input tokens
-        one_hot_tokens = torch.zeros_like(token_pred)
+        one_hot_tokens = torch.zeros_like(logits)
         one_hot_tokens.scatter_(
             2, input_tokens.unsqueeze(2).to(dtype=torch.int64), 1.0)
 
@@ -196,14 +196,14 @@ class SpatioTemporalTransformer(nn.Module):
 
         # Replace non-masked tokens with their one-hot encoding
         # Convert one hot encoding to softmax mask (-inf)
-        token_pred = torch.where(
+        logits = torch.where(
             mask.unsqueeze(2),
-            token_pred,
+            logits,
             torch.where(
                 one_hot_tokens == 1.0,
                 one_hot_tokens,
-                torch.tensor(-float("inf"), device=token_pred.device),
+                torch.tensor(-float("inf"), device=logits.device),
             ),
         )
 
-        return token_pred
+        return logits

@@ -1,3 +1,5 @@
+from einops import rearrange
+import random
 import logging
 import os
 from dataclasses import dataclass
@@ -12,8 +14,8 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from data.gameplay_dataset_reader import GameFrameDataset, PreprocessingConfig
-from models.st_transformer import SpatioTemporalTransformer
+from data.gameplay_dataset_reader import GameFrameDataset
+from models.st_transformer import SpatioTemporalTransformer, MaskedCrossEntropyLoss
 from models.tokenizer import Decoder, Encoder, Tokenizer
 
 
@@ -71,6 +73,7 @@ class TransformerTrainer:
     ):
         self.config = config
         self.model = model.to(device)
+        self.tokenizer = tokenizer.to(device)
         self.device = device
         self.global_step = 0
 
@@ -117,7 +120,8 @@ class TransformerTrainer:
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
-                logging.FileHandler(os.path.join(self.exp_dir, "training.log")),
+                logging.FileHandler(os.path.join(
+                    self.exp_dir, "training.log")),
                 logging.StreamHandler(),
             ],
         )
@@ -154,3 +158,40 @@ class TransformerTrainer:
 
         metrics_str = " ".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
         self.logger.info(f"{prefix} step {step}: {metrics_str}")
+
+    def train_epoch(self, epoch: int):
+        self.model.train()
+        epoch_losses = []
+
+        with tqdm(self.train_loader, desc=f"Epoch {epoch}") as pbar:
+            for batch_idx, batch in enumerate(pbar):
+                # Move batch to device
+                batch = {k: v.to(self.device) for k, v in batch.items()}
+
+                batch_size = batch["image"].shape[0]
+
+                with torch.no_grad():
+                    tokenizer_input = rearrange(
+                        batch["image"], "B T H W C -> (B T) H W C")
+                    # Get tokens for batch
+                    encoder_out = self.tokenizer.encode(tokenizer_input)
+                    tokens = rearrange(encoder_out.tokens,
+                                       "(B T) L -> B T L", B=batch_size)
+
+                tokens.requires_grad = True
+
+                # Mask tokens
+                mask = torch.zeros((tokens.shape[0], tokens.shape[-1]))
+                mask_ratio = random.random()
+                for i in range(len(tokens)):
+                    for j in range(tokens.shape[-1]):
+                        # replace with mask token
+                        if random.random() <= mask_ratio:
+                            tokens[i, -1, j] = self.model.mask_token
+                            mask[i, j] = 1.0
+
+                # Forward pass
+                logits = self.model(tokens)
+
+                # CSE loss
+                loss = MaskedCrossEntropyLoss(logits, tokens[:, -1, :], mask)

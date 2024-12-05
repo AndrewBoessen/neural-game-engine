@@ -23,16 +23,18 @@ class GameFrameDataset(Dataset):
     Handles sharded numpy files containing frame data and action labels.
     """
 
-    def __init__(self, shard_dir: str, preload_shards: bool = False):
+    def __init__(self, shard_dir: str, sequence_length: int, preload_shards: bool = False):
         """
         Initialize the dataset.
 
         Args:
             shard_dir (str): Directory containing the sharded numpy files
+            sequence_length: Number of images in model context window
             transform: Optional transforms to apply to the images
             preload_shards (bool): If True, loads all shards into memory at init
         """
         self.shard_dir = shard_dir
+        self.sequence_length = sequence_length
         self.transform = [
             transforms.ToTensor(),
         ]
@@ -155,19 +157,23 @@ class GameFrameDataset(Dataset):
         frames, actions = self._load_shard(shard_idx)
 
         # Get specific frame and action
-        frame = frames[local_idx]
-        action = actions[local_idx]
+        end_idx = local_idx + self.sequence_length if local_idx + \
+            self.sequence_length <= len(frames) else -1
+        frames = frames[local_idx: end_idx]
+        actions = actions[local_idx: end_idx]
 
-        # Convert frame to PIL Image for transforms
-        frame = Image.fromarray(frame)
+        # Convert frames to PIL Images for transforms
+        transformed_frames = []
+        for frame in frames:
+            frame_image = Image.fromarray(frame)
+            if self.transform:
+                transforms_list = transforms.Compose(self.transform)
+                frame_image = transforms_list(frame_image)
+            transformed_frames.append(frame_image)
 
-        # Apply transforms if specified
-        if self.transform:
-            transforms_list = transforms.Compose(self.transform)
-            frame = transforms_list(frame)
-        else:
-            frame = torch.from_numpy(np.array(frame)).permute(2, 0, 1)
+        # Stack frames into a tensor (sequence of frames)
+        frames = torch.stack(transformed_frames)
 
-        action = torch.tensor(action)
+        action = torch.tensor(actions)
 
-        return {"image": frame, "action": action}
+        return {"image": frames, "action": action}
