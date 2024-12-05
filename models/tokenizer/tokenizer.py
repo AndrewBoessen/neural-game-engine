@@ -7,7 +7,7 @@ from typing import Any, Dict, Tuple
 
 import torch
 import torch.nn as nn
-from blocks import Decoder, Encoder
+from .blocks import Decoder, Encoder
 from einops import rearrange
 from lpips import LPIPS
 
@@ -43,11 +43,14 @@ class Tokenizer(nn.Module):
         super().__init__()
         self.vocab_size = vocab_size
         self.encoder = encoder
-        self.pre_quant_conv = torch.nn.Conv2d(encoder.config.z_channels, embed_dim, 1)
+        self.pre_quant_conv = torch.nn.Conv2d(
+            encoder.config.z_channels, embed_dim, 1)
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.post_quant_conv = torch.nn.Conv2d(embed_dim, decoder.config.z_channels, 1)
+        self.post_quant_conv = torch.nn.Conv2d(
+            embed_dim, decoder.config.z_channels, 1)
         self.decoder = decoder
-        self.embedding.weight.data.uniform_(-1.0 / vocab_size, 1.0 / vocab_size)
+        self.embedding.weight.data.uniform_(-1.0 /
+                                            vocab_size, 1.0 / vocab_size)
         self.lpips = LPIPS().eval() if with_lpips else None
 
     def __repr__(self) -> str:

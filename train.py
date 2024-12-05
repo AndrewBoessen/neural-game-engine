@@ -26,10 +26,10 @@ def main():
 
     # Initialize datasets
     train_dataset = GameFrameDataset(
-        shard_dir="gameplay_data/train/", preload_shards=True
+        shard_dir="gameplay_data/train/", sequence_length=transformer_config["context_length"], preload_shards=True
     )
     val_dataset = GameFrameDataset(
-        shard_dir="gameplay_data/val/", preload_shards=True
+        shard_dir="gameplay_data/val/", sequence_length=transformer_config["context_length"], preload_shards=True
     )
 
     # Initialize model components using config values
@@ -49,7 +49,7 @@ def main():
         dim=transformer_config["dim"],
         num_heads=transformer_config["num_heads"],
         num_layers=transformer_config["num_layers"],
-        context_length=transformer_config["context_lengthl"],
+        context_length=transformer_config["context_length"],
         tokens_per_image=transformer_config["tokens_per_image"],
         vocab_size=transformer_config["vocab_size"],
         num_actions=transformer_config["num_actions"],
