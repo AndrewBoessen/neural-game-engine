@@ -99,13 +99,18 @@ class TransformerTrainer:
         # Setup optimizer
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
-            lr=config["learning_rate"],
-            betas=(config["beta1"], config["beta2"]),
+            lr=config["optimizer"]["learning_rate"],
+            betas=(
+                config["optimizer"]["betas"]["beta1"],
+                config["optimizer"]["betas"]["beta2"],
+            ),
         )
 
         # Setup learning rate scheduler
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, T_max=config["num_epochs"], eta_min=config["min_lr"]
+            self.optimizer,
+            T_max=config["training"]["num_epochs"],
+            eta_min=config["optimizer"]["min_lr"],
         )
 
         # Initialize logging
@@ -191,13 +196,14 @@ class TransformerTrainer:
                     random.random()
                     * np.sin(
                         min(
-                            self.global_step / self.config["ciriculum_warmup_steps"],
+                            self.global_step
+                            / self.config["training"]["ciriculum_warmup_steps"],
                             1.0,
                         )
                         * np.pi
                         / 2
                     ),
-                    self.config["min_train_mask_ratio"],
+                    self.config["training"]["min_train_mask_ratio"],
                 )
                 for i in range(len(tokens)):
                     for j in range(tokens.shape[-1]):
@@ -222,7 +228,7 @@ class TransformerTrainer:
 
                 epoch_losses.append(loss.item())
 
-                if batch_idx % self.config["log_every"] == 0:
+                if batch_idx % self.config["training"]["log_interval"] == 0:
                     self.log_metrics(metrics, self.global_step)
 
                 pbar.set_postfix(loss=f"{loss.item():.4f}")
@@ -289,7 +295,7 @@ class TransformerTrainer:
 
         best_val_loss = float("inf")
 
-        for epoch in range(self.config["num_epochs"]):
+        for epoch in range(self.config["training"]["num_epochs"]):
             train_loss = self.train_epoch(epoch)
             val_loss = self.validate(epoch)
             self.scheduler.step()
