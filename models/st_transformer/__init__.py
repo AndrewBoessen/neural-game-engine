@@ -13,5 +13,5 @@ __all__ = [
     "TemporalBlock",
     "SpatioTemporalLayer",
     "SpatioTemporalTransformer",
-    "MaskedCrossEntropyLoss"
+    "MaskedCrossEntropyLoss",
 ]

@@ -3,7 +3,6 @@ Credits to https://github.com/CompVis/taming-transformers
 """
 
 from dataclasses import dataclass
-from typing import List
 
 import torch
 import torch.nn as nn
@@ -15,9 +14,9 @@ class EncoderDecoderConfig:
     in_channels: int
     z_channels: int
     ch: int
-    ch_mult: List[int]
+    ch_mult: tuple
     num_res_blocks: int
-    attn_resolutions: List[int]
+    attn_resolutions: tuple
     out_ch: int
     dropout: float
 

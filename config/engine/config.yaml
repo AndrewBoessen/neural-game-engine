@@ -12,7 +12,7 @@ vocab_size: 512  # Total number of unique tokens in the vocabulary
 num_actions: 3  # Number of distinct action types in the model
 
 # Special Token Configuration
-mask_token: 512 # Index of the mask token used for masking strategies
+mask_token: 0 # Index of the mask token used for masking strategies
 
 # Dropout Rates
 attn_drop: 0.15  # Dropout rate for attention layers

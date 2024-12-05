@@ -7,8 +7,6 @@ from typing import Any, Dict
 
 import numpy as np
 import torch
-import torch.nn as nn
-import yaml
 from einops import rearrange
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
@@ -18,37 +16,7 @@ from tqdm import tqdm
 from data.gameplay_dataset_reader import GameFrameDataset
 from models.st_transformer import (MaskedCrossEntropyLoss,
                                    SpatioTemporalTransformer)
-from models.tokenizer import Decoder, Encoder, Tokenizer
-
-
-# Config for tokenizer encoder and decoder
-@dataclass
-class EncoderDecoderConfig:
-    resolution: int
-    in_channels: int
-    z_channels: int
-    ch: int
-    ch_mult: tuple
-    num_res_blocks: int
-    attn_resolutions: tuple
-    out_ch: int
-    dropout: float
-
-
-# Config for ST-Transformer
-@dataclass
-class TransformerConfig:
-    dim: int
-    num_heads: int
-    num_layers: int
-    context_length: int
-    tokens_per_image: int
-    vocab_size: int
-    num_actions: int
-    mask_token: int
-    attn_drop: float
-    proj_drop: float
-    ffn_drop: float
+from models.tokenizer import Tokenizer
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
