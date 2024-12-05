@@ -1,7 +1,6 @@
-from einops import rearrange
-import random
 import logging
 import os
+import random
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
@@ -9,13 +8,15 @@ from typing import Any, Dict
 import torch
 import torch.nn as nn
 import yaml
+from einops import rearrange
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from data.gameplay_dataset_reader import GameFrameDataset
-from models.st_transformer import SpatioTemporalTransformer, MaskedCrossEntropyLoss
+from models.st_transformer import (MaskedCrossEntropyLoss,
+                                   SpatioTemporalTransformer)
 from models.tokenizer import Decoder, Encoder, Tokenizer
 
 
@@ -120,8 +121,7 @@ class TransformerTrainer:
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
-                logging.FileHandler(os.path.join(
-                    self.exp_dir, "training.log")),
+                logging.FileHandler(os.path.join(self.exp_dir, "training.log")),
                 logging.StreamHandler(),
             ],
         )
@@ -172,11 +172,13 @@ class TransformerTrainer:
 
                 with torch.no_grad():
                     tokenizer_input = rearrange(
-                        batch["image"], "B T H W C -> (B T) H W C")
+                        batch["image"], "B T H W C -> (B T) H W C"
+                    )
                     # Get tokens for batch
                     encoder_out = self.tokenizer.encode(tokenizer_input)
-                    tokens = rearrange(encoder_out.tokens,
-                                       "(B T) L -> B T L", B=batch_size)
+                    tokens = rearrange(
+                        encoder_out.tokens, "(B T) L -> B T L", B=batch_size
+                    )
 
                 tokens.requires_grad = True
 
@@ -189,9 +191,27 @@ class TransformerTrainer:
                         if random.random() <= mask_ratio:
                             tokens[i, -1, j] = self.model.mask_token
                             mask[i, j] = 1.0
-
+                # offset by one for mask token
+                tokens += 1
                 # Forward pass
                 logits = self.model(tokens)
 
                 # CSE loss
                 loss = MaskedCrossEntropyLoss(logits, tokens[:, -1, :], mask)
+
+                # Backward pass
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+                metrics = {"loss": loss.item()}
+
+                epoch_losses.append(loss.item())
+
+                if batch_idx % self.config["log_every"] == 0:
+                    self.log_metrics(metrics, self.global_step)
+
+                pbar.set_postfix(loss=f"{loss.item():.4f}")
+                self.global_step += 1
+
+        return sum(epoch_losses) / len(epoch_losses)
