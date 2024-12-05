@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 
+import numpy as np
 import torch
 import torch.nn as nn
 import yaml
@@ -184,7 +185,20 @@ class TransformerTrainer:
 
                 # Mask tokens
                 mask = torch.zeros((tokens.shape[0], tokens.shape[-1]))
-                mask_ratio = random.random()
+
+                # Use ciriculum learning for mask ratio
+                mask_ratio = max(
+                    random.random()
+                    * np.sin(
+                        min(
+                            self.global_step / self.config["ciriculum_warmup_steps"],
+                            1.0,
+                        )
+                        * np.pi
+                        / 2
+                    ),
+                    self.config["min_train_mask_ratio"],
+                )
                 for i in range(len(tokens)):
                     for j in range(tokens.shape[-1]):
                         # replace with mask token
@@ -215,3 +229,78 @@ class TransformerTrainer:
                 self.global_step += 1
 
         return sum(epoch_losses) / len(epoch_losses)
+
+    @torch.no_grad()
+    def validate(self, epoch: int):
+        self.model.eval()
+        val_losses = []
+
+        for batch in tqdm(self.val_loader, desc="Validation"):
+            batch = {k: v.to(self.device) for k, v in batch.items()}
+
+            batch_size = batch["image"].shape[0]
+
+            tokenizer_input = rearrange(batch["image"], "B T H W C -> (B T) H W C")
+            # Get tokens for batch
+            encoder_out = self.tokenizer.encode(tokenizer_input)
+            tokens = rearrange(encoder_out.tokens, "(B T) L -> B T L", B=batch_size)
+
+            # Mask tokens
+            mask = torch.zeros((tokens.shape[0], tokens.shape[-1]))
+
+            # Use ciriculum learning for mask ratio
+            mask_ratio = max(
+                random.random()
+                * np.sin(
+                    min(
+                        self.global_step / self.config["ciriculum_warmup_steps"],
+                        1.0,
+                    )
+                    * np.pi
+                    / 2
+                ),
+                self.config["min_train_mask_ratio"],
+            )
+            for i in range(len(tokens)):
+                for j in range(tokens.shape[-1]):
+                    # replace with mask token
+                    if random.random() <= mask_ratio:
+                        tokens[i, -1, j] = self.model.mask_token
+                        mask[i, j] = 1.0
+            # offset by one for mask token
+            tokens += 1
+            # Forward pass
+            logits = self.model(tokens)
+
+            # CSE loss
+            loss = MaskedCrossEntropyLoss(logits, tokens[:, -1, :], mask)
+
+            val_losses.append(loss.item())
+
+        avg_loss = sum(val_losses) / len(val_losses)
+        metrics = {"val_loss": avg_loss}
+        self.log_metrics(metrics, self.global_step, prefix="val")
+
+        return avg_loss
+
+    def train(self):
+        self.logger.info("Starting training...")
+        self.logger.info(f"Config: {self.config}")
+
+        best_val_loss = float("inf")
+
+        for epoch in range(self.config["num_epochs"]):
+            train_loss = self.train_epoch(epoch)
+            val_loss = self.validate(epoch)
+            self.scheduler.step()
+
+            # Save best model
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                self.save_checkpoint(epoch)
+
+            self.logger.info(
+                f"Epoch {epoch} - Train Loss: {train_loss:.4f}, "
+                f"Val Loss: {val_loss:.4f}, "
+                f"LR: {self.scheduler.get_last_lr()[0]:.6f}"
+            )

@@ -23,6 +23,8 @@ training:
   gradient_clip: 1.0  # Gradient clipping threshold
   mixed_precision: true  # Use mixed precision training
   seed: 42  # Random seed for reproducibility
+  ciriculum_warmup_steps: 50000 # Number of steps in ciriculum
+  min_train_mask_ratio: 0.2 # Minimum mask ratio
 
 # Learning Rate Scheduling
 lr_scheduler:
