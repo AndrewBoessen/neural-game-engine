@@ -42,7 +42,7 @@ def MaskedCrossEntropyLoss(
 
     # Apply the mask to zero out losses for non-masked tokens
     # mask should be the same shape as labels, with 1s for masked tokens
-    masked_losses = losses * mask.float()
+    masked_losses = losses * mask
 
     # Calculate the total loss
     # Divide by the number of masked tokens to normalize

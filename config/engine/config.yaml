@@ -3,19 +3,19 @@ _target_: models.st_transformer.SpatioTemporalTransformer
 # Model Architecture Dimensions
 dim: 256  # Embedding and hidden layer dimension
 num_heads: 8  # Number of attention heads
-num_layers: 6  # Number of transformer layers
+num_layers: 8  # Number of transformer layers
 
 # Context and Tokenization Parameters
-context_length: 10  # Maximum sequence length
+context_length: 40  # Maximum sequence length
 tokens_per_image: 256  # Number of tokens used to represent an image
 vocab_size: 512  # Total number of unique tokens in the vocabulary
 num_actions: 3  # Number of distinct action types in the model
 
 # Special Token Configuration
-mask_token: 0 # Index of the mask token used for masking strategies
+mask_token: ${vocab_size} # Index of the mask token used for masking strategies
 
 # Dropout Rates
-attn_drop: 0.15  # Dropout rate for attention layers
+attn_drop: 0.  # Dropout rate for attention layers
 proj_drop: 0.15  # Dropout rate for projection layers
-ffn_drop: 0.15  # Dropout rate for feed-forward network layers
+ffn_drop: 0.2  # Dropout rate for feed-forward network layers
 

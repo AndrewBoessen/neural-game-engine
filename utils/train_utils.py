@@ -84,7 +84,7 @@ class TransformerTrainer:
     def setup_logging(self):
         # Create experiment directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.exp_dir = os.path.join("experiments", f"vqvae_{timestamp}")
+        self.exp_dir = os.path.join("experiments", f"game_engine_{timestamp}")
         os.makedirs(self.exp_dir, exist_ok=True)
 
         # Setup file logging
@@ -136,14 +136,11 @@ class TransformerTrainer:
 
         with tqdm(self.train_loader, desc=f"Epoch {epoch}") as pbar:
             for batch_idx, (tokens, actions) in enumerate(pbar):
-                # Move batch to device
-                tokens.to(self.device)
-                actions.to(self.device)
-                # offset by one for mask token
-                tokens += 1
-
-                # Mask tokens
+                # Init empty mask
                 mask = torch.zeros((tokens.shape[0], tokens.shape[-1]))
+
+                # Tokens values for last image
+                labels = tokens[:, -1, :].to(self.device)
 
                 # Use ciriculum learning for mask ratio
                 mask_ratio = max(
@@ -166,7 +163,7 @@ class TransformerTrainer:
                             tokens[i, -1, j] = self.model.mask_token
                             mask[i, j] = 1.0
 
-                mask = mask.to(tokens.device)
+                mask = mask.to(self.device)
 
                 actions += self.model.vocab_size + 1
 
@@ -175,7 +172,9 @@ class TransformerTrainer:
                 ), "images and actions do not align"
 
                 # Concat image tokens and actions
-                sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1)
+                sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1).to(
+                    self.device
+                )
 
                 # concat all timesteps
                 sequence = rearrange(sequence, "B T L -> B (T L)")
@@ -184,7 +183,7 @@ class TransformerTrainer:
                 logits = self.model(sequence)
 
                 # CSE loss
-                loss = MaskedCrossEntropyLoss(logits, tokens[:, -1, :], mask)
+                loss = MaskedCrossEntropyLoss(logits, labels, mask)
 
                 # Backward pass
                 self.optimizer.zero_grad()
@@ -195,7 +194,7 @@ class TransformerTrainer:
 
                 epoch_losses.append(loss.item())
 
-                if batch_idx % self.config["training"]["log_interval"] == 0:
+                if (batch_idx + 1) % self.config["training"]["log_interval"] == 0:
                     self.log_metrics(metrics, self.global_step)
 
                 pbar.set_postfix(loss=f"{loss.item():.4f}")
@@ -208,27 +207,26 @@ class TransformerTrainer:
         self.model.eval()
         val_losses = []
 
-        for batch in tqdm(self.val_loader, desc="Validation"):
-            batch = {k: v.to(self.device) for k, v in batch.items()}
-
-            # offset by one for mask token
-            tokens = batch["tokens"] + 1
-
-            # Mask tokens
+        for tokens, actions in tqdm(self.val_loader, desc="Validation"):
+            # Init empty mask
             mask = torch.zeros((tokens.shape[0], tokens.shape[-1]))
+
+            # Tokens values for last image
+            labels = tokens[:, -1, :].to(self.device)
 
             # Use ciriculum learning for mask ratio
             mask_ratio = max(
                 random.random()
                 * np.sin(
                     min(
-                        self.global_step / self.config["ciriculum_warmup_steps"],
+                        self.global_step
+                        / self.config["training"]["ciriculum_warmup_steps"],
                         1.0,
                     )
                     * np.pi
                     / 2
                 ),
-                self.config["min_train_mask_ratio"],
+                self.config["training"]["min_train_mask_ratio"],
             )
             for i in range(len(tokens)):
                 for j in range(tokens.shape[-1]):
@@ -236,14 +234,17 @@ class TransformerTrainer:
                     if random.random() <= mask_ratio:
                         tokens[i, -1, j] = self.model.mask_token
                         mask[i, j] = 1.0
-            mask = mask.to(tokens.device)
 
-            actions = batch["action"] + self.model.vocab_size + 1
+            mask = mask.to(self.device)
+
+            actions += self.model.vocab_size + 1
 
             assert tokens.size(1) == actions.size(1), "images and actions do not align"
 
             # Concat image tokens and actions
-            sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1)
+            sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1).to(
+                self.device
+            )
 
             # concat all timesteps
             sequence = rearrange(sequence, "B T L -> B (T L)")
@@ -252,8 +253,7 @@ class TransformerTrainer:
             logits = self.model(sequence)
 
             # CSE loss
-            loss = MaskedCrossEntropyLoss(logits, tokens[:, -1, :], mask)
-
+            loss = MaskedCrossEntropyLoss(logits, labels, mask)
             val_losses.append(loss.item())
 
         avg_loss = sum(val_losses) / len(val_losses)

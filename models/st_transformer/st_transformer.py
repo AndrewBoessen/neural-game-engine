@@ -146,23 +146,56 @@ class SpatioTemporalTransformer(nn.Module):
         :param x: input tokens
         """
         # Embed images and actions
-        embeddings = self.embedding(x.type(torch.int64))
+        embeddings = self.embedding(x)
 
         # Tile positional embeddings
-        for i in range(x.shape[1]):
-            if i % (self.tokens_per_image + 1) == 0:
-                # Only apply temporal positional embedding to action
-                embeddings[:, i, : self.dim] += self.temporal_embedding(
-                    torch.tensor(i // (self.tokens_per_image + 1), device=x.device)
-                )
-            else:
-                # apply both spatial and temporal positional embeddings to image
-                embeddings[:, i, : self.dim] += self.temporal_embedding(
-                    torch.tensor(i // (self.tokens_per_image + 1), device=x.device)
-                )
-                embeddings[:, i, : self.dim] += self.spatial_embedding(
-                    torch.tensor(i % (self.tokens_per_image + 1) - 1, device=x.device)
-                )
+        # Create a range tensor for indices
+
+        batch_size, seq_len = x.shape[0], x.shape[1]
+
+        # Calculate image and sequence indices
+        image_indices = torch.div(
+            torch.arange(seq_len, device=x.device),
+            self.tokens_per_image + 1,
+            rounding_mode="floor",
+        )
+
+        # Create a mask for action tokens (tokens at start of each sequence)
+        action_mask = (
+            torch.remainder(
+                torch.arange(seq_len, device=x.device), self.tokens_per_image + 1
+            )
+            == 0
+        )
+
+        # Temporal embedding for all tokens
+        temporal_embeddings = self.temporal_embedding(image_indices)
+
+        # Expand temporal embeddings to match batch size
+        temporal_embeddings = temporal_embeddings.unsqueeze(0).expand(
+            batch_size, -1, -1
+        )
+
+        # Add temporal embeddings to the main embeddings
+        embeddings[:, :, : self.dim] += temporal_embeddings
+
+        # Spatial embedding for non-action tokens
+        spatial_mask = ~action_mask
+        spatial_indices = (
+            torch.remainder(
+                torch.arange(seq_len, device=x.device)[spatial_mask],
+                self.tokens_per_image + 1,
+            )
+            - 1
+        )
+
+        # Create spatial embeddings for non-action tokens
+        if torch.any(spatial_mask):
+            spatial_embeddings = self.spatial_embedding(spatial_indices)
+
+        # Expand and add spatial embeddings
+        spatial_embeddings = spatial_embeddings.unsqueeze(0).expand(batch_size, -1, -1)
+        embeddings[:, spatial_mask, : self.dim] += spatial_embeddings
 
         # Attention Layers
         for layer in self.layers:
@@ -172,26 +205,10 @@ class SpatioTemporalTransformer(nn.Module):
         tokens_to_predict = embeddings[:, -self.tokens_per_image :, :]
         logits = self.prediction_head(tokens_to_predict)
 
-        # Replace unmasked tokens with one hot encoding
-        input_tokens = x[:, -self.tokens_per_image :]
+        ## Replace unmasked tokens with one hot encoding
+        # input_tokens = x[:, -self.tokens_per_image :]
 
-        # Create a one-hot encoding for input tokens
-        one_hot_tokens = torch.zeros_like(logits)
-        one_hot_tokens.scatter_(2, input_tokens.unsqueeze(2).to(dtype=torch.int64), 1.0)
-
-        # Create a mask for tokens that should be predicted (masked tokens)
-        mask = input_tokens == self.mask_token
-
-        # Replace non-masked tokens with their one-hot encoding
-        # Convert one hot encoding to softmax mask (-inf)
-        logits = torch.where(
-            mask.unsqueeze(2),
-            logits,
-            torch.where(
-                one_hot_tokens == 1.0,
-                one_hot_tokens,
-                float("-inf"),
-            ),
-        )
+        ## Create a mask for tokens that should be predicted (masked tokens)
+        # mask = input_tokens == self.mask_token
 
         return logits
