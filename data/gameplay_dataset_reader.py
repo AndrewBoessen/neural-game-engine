@@ -1,11 +1,12 @@
 import os
+import random
 from dataclasses import dataclass
-from typing import Dict,  Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import transforms
 
 
@@ -23,18 +24,16 @@ class GameFrameDataset(Dataset):
     Handles sharded numpy files containing frame data and action labels.
     """
 
-    def __init__(self, shard_dir: str, sequence_length: int, preload_shards: bool = False):
+    def __init__(self, shard_dir: str, preload_shards: bool = False):
         """
         Initialize the dataset.
 
         Args:
             shard_dir (str): Directory containing the sharded numpy files
-            sequence_length: Number of images in model context window
             transform: Optional transforms to apply to the images
             preload_shards (bool): If True, loads all shards into memory at init
         """
         self.shard_dir = shard_dir
-        self.sequence_length = sequence_length
         self.transform = [
             transforms.ToTensor(),
         ]
@@ -70,8 +69,7 @@ class GameFrameDataset(Dataset):
             # Load just the shape information without loading the full array
             shard_size = np.load(shard_path, mmap_mode="r").shape[0]
             self.shard_sizes.append(shard_size)
-            self.cumulative_sizes.append(
-                self.cumulative_sizes[-1] + shard_size)
+            self.cumulative_sizes.append(self.cumulative_sizes[-1] + shard_size)
 
         # Initialize shard cache if preloading
         self.shard_cache: Dict[int, Dict[str, np.ndarray]] = {}
@@ -106,8 +104,7 @@ class GameFrameDataset(Dataset):
             )
 
         frame_path = os.path.join(self.shard_dir, self.frame_shards[shard_idx])
-        action_path = os.path.join(
-            self.shard_dir, self.action_shards[shard_idx])
+        action_path = os.path.join(self.shard_dir, self.action_shards[shard_idx])
 
         frames = np.load(frame_path)
         actions = np.load(action_path)
@@ -157,23 +154,19 @@ class GameFrameDataset(Dataset):
         frames, actions = self._load_shard(shard_idx)
 
         # Get specific frame and action
-        end_idx = local_idx + self.sequence_length if local_idx + \
-            self.sequence_length <= len(frames) else -1
-        frames = frames[local_idx: end_idx]
-        actions = actions[local_idx: end_idx]
+        frame = frames[local_idx]
+        action = actions[local_idx]
 
-        # Convert frames to PIL Images for transforms
-        transformed_frames = []
-        for frame in frames:
-            frame_image = Image.fromarray(frame)
-            if self.transform:
-                transforms_list = transforms.Compose(self.transform)
-                frame_image = transforms_list(frame_image)
-            transformed_frames.append(frame_image)
+        # Convert frame to PIL Image for transforms
+        frame = Image.fromarray(frame)
 
-        # Stack frames into a tensor (sequence of frames)
-        frames = torch.stack(transformed_frames)
+        # Apply transforms if specified
+        if self.transform:
+            transforms_list = transforms.Compose(self.transform)
+            frame = transforms_list(frame)
+        else:
+            frame = torch.from_numpy(np.array(frame)).permute(2, 0, 1)
 
-        action = torch.tensor(actions)
+        action = torch.tensor(action)
 
-        return {"image": frames, "action": action}
+        return {"image": frame, "action": action}

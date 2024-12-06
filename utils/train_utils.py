@@ -16,7 +16,6 @@ from tqdm import tqdm
 from data.gameplay_dataset_reader import GameFrameDataset
 from models.st_transformer import (MaskedCrossEntropyLoss,
                                    SpatioTemporalTransformer)
-from models.tokenizer import Tokenizer
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
@@ -36,14 +35,12 @@ class TransformerTrainer:
         self,
         config: Dict[str, Any],
         model: SpatioTemporalTransformer,
-        tokenizer: Tokenizer,
         train_dataset: GameFrameDataset,
         val_dataset: GameFrameDataset,
         device: str = "cuda",
     ):
         self.config = config
         self.model = model.to(device)
-        self.tokenizer = tokenizer.to(device).eval()
         self.device = device
         self.global_step = 0
 
@@ -138,29 +135,10 @@ class TransformerTrainer:
         epoch_losses = []
 
         with tqdm(self.train_loader, desc=f"Epoch {epoch}") as pbar:
-            for batch_idx, batch in enumerate(pbar):
+            for batch_idx, (tokens, actions) in enumerate(pbar):
                 # Move batch to device
-                batch = {k: v.to(self.device) for k, v in batch.items()}
-
-                batch_size = batch["image"].shape[0]
-
-                with torch.no_grad():
-                    tokenizer_input = rearrange(
-                        batch["image"], "B T H W C -> (B T) H W C"
-                    )
-
-                    splits = torch.split(tokenizer_input, 1)
-
-                    results = []
-
-                    for split in splits:
-                        # Get tokens for batch
-                        encoder_out = self.tokenizer.encode(split)
-                        results.append(encoder_out.tokens)
-
-                    tokens = torch.cat(results, dim=0)
-                    tokens = rearrange(tokens, "(B T) L -> B T L", B=batch_size)
-
+                tokens.to(self.device)
+                actions.to(self.device)
                 # offset by one for mask token
                 tokens += 1
 
@@ -190,7 +168,7 @@ class TransformerTrainer:
 
                 mask = mask.to(tokens.device)
 
-                actions = batch["action"] + self.model.vocab_size + 1
+                actions += self.model.vocab_size + 1
 
                 assert tokens.size(1) == actions.size(
                     1
@@ -233,12 +211,8 @@ class TransformerTrainer:
         for batch in tqdm(self.val_loader, desc="Validation"):
             batch = {k: v.to(self.device) for k, v in batch.items()}
 
-            batch_size = batch["image"].shape[0]
-
-            tokenizer_input = rearrange(batch["image"], "B T H W C -> (B T) H W C")
-            # Get tokens for batch
-            encoder_out = self.tokenizer.encode(tokenizer_input)
-            tokens = rearrange(encoder_out.tokens, "(B T) L -> B T L", B=batch_size)
+            # offset by one for mask token
+            tokens = batch["tokens"] + 1
 
             # Mask tokens
             mask = torch.zeros((tokens.shape[0], tokens.shape[-1]))
@@ -262,10 +236,20 @@ class TransformerTrainer:
                     if random.random() <= mask_ratio:
                         tokens[i, -1, j] = self.model.mask_token
                         mask[i, j] = 1.0
-            # offset by one for mask token
-            tokens += 1
+            mask = mask.to(tokens.device)
+
+            actions = batch["action"] + self.model.vocab_size + 1
+
+            assert tokens.size(1) == actions.size(1), "images and actions do not align"
+
+            # Concat image tokens and actions
+            sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1)
+
+            # concat all timesteps
+            sequence = rearrange(sequence, "B T L -> B (T L)")
+
             # Forward pass
-            logits = self.model(tokens)
+            logits = self.model(sequence)
 
             # CSE loss
             loss = MaskedCrossEntropyLoss(logits, tokens[:, -1, :], mask)

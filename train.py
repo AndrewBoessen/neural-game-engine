@@ -1,6 +1,6 @@
 import torch
 
-from data.gameplay_dataset_reader import GameFrameDataset
+from data.token_dataset_reader import TokenDataset
 from models.st_transformer import SpatioTemporalTransformer
 from models.tokenizer import Decoder, Encoder, EncoderDecoderConfig, Tokenizer
 from utils.train_utils import TransformerTrainer, load_config
@@ -29,15 +29,17 @@ def main():
     )
 
     # Initialize datasets
-    train_dataset = GameFrameDataset(
-        shard_dir="gameplay_data/train/",
-        sequence_length=transformer_config["context_length"],
-        preload_shards=True,
+    train_dataset = TokenDataset(
+        image_tokens_path="token_data/train/tokens.npy",
+        action_tokens_path="token_data/train/actions.npy",
+        context_length=transformer_config["context_length"],
+        stride=1,
     )
-    val_dataset = GameFrameDataset(
-        shard_dir="gameplay_data/val/",
-        sequence_length=transformer_config["context_length"],
-        preload_shards=True,
+    val_dataset = TokenDataset(
+        image_tokens_path="token_data/val/tokens.npy",
+        action_tokens_path="token_data/val/actions.npy",
+        context_length=transformer_config["context_length"],
+        stride=1,
     )
 
     # Initialize model components using config values
@@ -73,7 +75,7 @@ def main():
     )
 
     trainer = TransformerTrainer(
-        train_config, engine, tokenizer, train_dataset, val_dataset
+        train_config, engine, train_dataset, val_dataset, device
     )
 
     trainer.train()
