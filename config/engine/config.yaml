@@ -6,7 +6,7 @@ num_heads: 8  # Number of attention heads
 num_layers: 6  # Number of transformer layers
 
 # Context and Tokenization Parameters
-context_length: 100  # Maximum sequence length
+context_length: 10  # Maximum sequence length
 tokens_per_image: 256  # Number of tokens used to represent an image
 vocab_size: 512  # Total number of unique tokens in the vocabulary
 num_actions: 3  # Number of distinct action types in the model

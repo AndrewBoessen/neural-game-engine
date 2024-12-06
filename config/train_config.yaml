@@ -4,6 +4,8 @@
 batch_size: 4  # Number of samples per training batch
 num_workers: 4  # Number of subprocesses to use for data loading
 
+tokenizer_checkpoint: "checkpoint_epoch_15.pt"
+
 # Optimization Parameters
 optimizer:
   name: "adam"  # Optimizer type (Adam)

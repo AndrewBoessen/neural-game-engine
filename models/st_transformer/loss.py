@@ -31,8 +31,8 @@ def MaskedCrossEntropyLoss(
     loss_fct = nn.CrossEntropyLoss(reduction="none")
 
     # Flatten the logits and labels
-    flat_logits = logits.view(-1, logits.size(-1))
-    flat_labels = labels.view(-1)
+    flat_logits = logits.reshape(-1, logits.size(-1))
+    flat_labels = labels.reshape(-1)
 
     # Compute loss for each token
     losses = loss_fct(flat_logits, flat_labels)
@@ -47,6 +47,7 @@ def MaskedCrossEntropyLoss(
     # Calculate the total loss
     # Divide by the number of masked tokens to normalize
     num_masked_tokens = mask.sum().float()
+
     if num_masked_tokens == 0:
         return torch.tensor(0.0, device=losses.device)
 

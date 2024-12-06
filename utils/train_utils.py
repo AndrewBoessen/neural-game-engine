@@ -43,7 +43,7 @@ class TransformerTrainer:
     ):
         self.config = config
         self.model = model.to(device)
-        self.tokenizer = tokenizer.to(device)
+        self.tokenizer = tokenizer.to(device).eval()
         self.device = device
         self.global_step = 0
 
@@ -95,8 +95,7 @@ class TransformerTrainer:
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
-                logging.FileHandler(os.path.join(
-                    self.exp_dir, "training.log")),
+                logging.FileHandler(os.path.join(self.exp_dir, "training.log")),
                 logging.StreamHandler(),
             ],
         )
@@ -149,13 +148,18 @@ class TransformerTrainer:
                     tokenizer_input = rearrange(
                         batch["image"], "B T H W C -> (B T) H W C"
                     )
-                    # Get tokens for batch
-                    encoder_out = self.tokenizer.encode(tokenizer_input)
-                    tokens = rearrange(
-                        encoder_out.tokens, "(B T) L -> B T L", B=batch_size
-                    )
 
-                tokens.requires_grad = True
+                    splits = torch.split(tokenizer_input, 1)
+
+                    results = []
+
+                    for split in splits:
+                        # Get tokens for batch
+                        encoder_out = self.tokenizer.encode(split)
+                        results.append(encoder_out.tokens)
+
+                    tokens = torch.cat(results, dim=0)
+                    tokens = rearrange(tokens, "(B T) L -> B T L", B=batch_size)
 
                 # offset by one for mask token
                 tokens += 1
@@ -184,13 +188,19 @@ class TransformerTrainer:
                             tokens[i, -1, j] = self.model.mask_token
                             mask[i, j] = 1.0
 
-                actions = batch["action"]
+                mask = mask.to(tokens.device)
+
+                actions = batch["action"] + self.model.vocab_size + 1
 
                 assert tokens.size(1) == actions.size(
-                    1), "images and actions do not align"
+                    1
+                ), "images and actions do not align"
 
                 # Concat image tokens and actions
                 sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1)
+
+                # concat all timesteps
+                sequence = rearrange(sequence, "B T L -> B (T L)")
 
                 # Forward pass
                 logits = self.model(sequence)
@@ -225,12 +235,10 @@ class TransformerTrainer:
 
             batch_size = batch["image"].shape[0]
 
-            tokenizer_input = rearrange(
-                batch["image"], "B T H W C -> (B T) H W C")
+            tokenizer_input = rearrange(batch["image"], "B T H W C -> (B T) H W C")
             # Get tokens for batch
             encoder_out = self.tokenizer.encode(tokenizer_input)
-            tokens = rearrange(encoder_out.tokens,
-                               "(B T) L -> B T L", B=batch_size)
+            tokens = rearrange(encoder_out.tokens, "(B T) L -> B T L", B=batch_size)
 
             # Mask tokens
             mask = torch.zeros((tokens.shape[0], tokens.shape[-1]))
@@ -240,8 +248,7 @@ class TransformerTrainer:
                 random.random()
                 * np.sin(
                     min(
-                        self.global_step /
-                        self.config["ciriculum_warmup_steps"],
+                        self.global_step / self.config["ciriculum_warmup_steps"],
                         1.0,
                     )
                     * np.pi

@@ -1,8 +1,11 @@
-import torch
 import pytest
+import torch
 
 # Import the previously defined blocks
-from models.st_transformer import SpatioTemporalTransformer, SpatioTemporalLayer, LayerNorm, FeedForward, SpatialBlock, TemporalBlock, PredictionHead, MaskedCrossEntropyLoss
+from models.st_transformer import (FeedForward, LayerNorm,
+                                   MaskedCrossEntropyLoss, PredictionHead,
+                                   SpatialBlock, SpatioTemporalLayer,
+                                   SpatioTemporalTransformer, TemporalBlock)
 
 
 class TestMaskedCrossEntropyLoss:
@@ -24,10 +27,13 @@ class TestMaskedCrossEntropyLoss:
         labels = torch.randint(0, vocab_size, (batch_size, seq_length))
 
         # Varied mask for different sequences
-        mask = torch.tensor([
-            [0, 1, 1, 0, 0],  # First sequence: 2nd and 3rd tokens masked
-            [1, 0, 0, 1, 0]   # Second sequence: 1st and 4th tokens masked
-        ], dtype=torch.bool)
+        mask = torch.tensor(
+            [
+                [0, 1, 1, 0, 0],  # First sequence: 2nd and 3rd tokens masked
+                [1, 0, 0, 1, 0],  # Second sequence: 1st and 4th tokens masked
+            ],
+            dtype=torch.bool,
+        )
 
         return logits, labels, mask
 
@@ -83,7 +89,8 @@ class TestMaskedCrossEntropyLoss:
 
         # Create labels with incorrect shape
         incorrect_labels = torch.randint(
-            0, logits.size(-1), (labels.size(0), labels.size(1) + 1))
+            0, logits.size(-1), (labels.size(0), labels.size(1) + 1)
+        )
 
         # Mask with incorrect shape
         mask = torch.ones_like(incorrect_labels, dtype=torch.bool)
@@ -98,11 +105,16 @@ class TestMaskedCrossEntropyLoss:
         """
 
         # Create logits with very large values
-        logits = torch.tensor([[
-            [1e10, -1e10, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 1e10, -1e10, 0, 0, 0],
-            [0, 0, 1e10, -1e10, 0, 0, 0, 0, 0, 0]
-        ]], dtype=torch.float32)
+        logits = torch.tensor(
+            [
+                [
+                    [1e10, -1e10, 0, 0, 0, 0, 0, 0, 0, 0],
+                    [0, 0, 0, 0, 0, 1e10, -1e10, 0, 0, 0],
+                    [0, 0, 1e10, -1e10, 0, 0, 0, 0, 0, 0],
+                ]
+            ],
+            dtype=torch.float32,
+        )
 
         labels = torch.tensor([[0, 5, 2]])
         mask = torch.tensor([[1, 1, 1]])
@@ -127,10 +139,13 @@ class TestMaskedCrossEntropyLoss:
         labels = torch.randint(0, vocab_size, (batch_size, seq_length))
 
         # Varied mask with different patterns
-        mask = torch.tensor([
-            [0, 1, 1, 0, 0],  # First sequence: 2nd and 3rd tokens masked
-            [1, 0, 0, 1, 0]   # Second sequence: 1st and 4th tokens masked
-        ], dtype=torch.bool)
+        mask = torch.tensor(
+            [
+                [0, 1, 1, 0, 0],  # First sequence: 2nd and 3rd tokens masked
+                [1, 0, 0, 1, 0],  # Second sequence: 1st and 4th tokens masked
+            ],
+            dtype=torch.bool,
+        )
 
         # Calculate loss
         loss = MaskedCrossEntropyLoss(logits, labels, mask)
@@ -147,17 +162,17 @@ class TestSpatioTemporalTransformer:
         Fixture to create a standard SpatioTemporalTransformer for testing
         """
         return SpatioTemporalTransformer(
-            dim=64,               # model dimension
-            num_heads=4,          # 4 attention heads
-            num_layers=2,         # 2 transformer layers
-            context_length=5,     # 5 context steps
+            dim=64,  # model dimension
+            num_heads=4,  # 4 attention heads
+            num_layers=2,  # 2 transformer layers
+            context_length=5,  # 5 context steps
             tokens_per_image=10,  # 10 tokens per image
-            vocab_size=1000,      # 1000 vocab tokens
-            num_actions=20,       # 20 possible actions
-            mask_token=0,         # 0 as mask token
-            attn_drop=0.1,        # 10% attention dropout
-            proj_drop=0.1,        # 10% projection dropout
-            ffn_drop=0.1          # 10% feed-forward dropout
+            vocab_size=1000,  # 1000 vocab tokens
+            num_actions=20,  # 20 possible actions
+            mask_token=0,  # 0 as mask token
+            attn_drop=0.1,  # 10% attention dropout
+            proj_drop=0.1,  # 10% projection dropout
+            ffn_drop=0.1,  # 10% feed-forward dropout
         )
 
     def test_initialization(self, transformer_model):
@@ -178,27 +193,21 @@ class TestSpatioTemporalTransformer:
         Test embedding layers initialization
         """
         # Image embedding
-        assert isinstance(transformer_model.image_embedding,
-                          torch.nn.Embedding)
+        assert isinstance(transformer_model.embedding, torch.nn.Embedding)
         # vocab_size + 1 for mask
-        assert transformer_model.image_embedding.num_embeddings == 1001
-        assert transformer_model.image_embedding.embedding_dim == 64
-
-        # Action embedding
-        assert isinstance(transformer_model.action_embedding,
-                          torch.nn.Embedding)
-        assert transformer_model.action_embedding.num_embeddings == 20
-        assert transformer_model.action_embedding.embedding_dim == 64
+        assert (
+            transformer_model.embedding.num_embeddings
+            == 1001 + transformer_model.num_actions
+        )
+        assert transformer_model.embedding.embedding_dim == 64
 
         # Spatial embedding
-        assert isinstance(transformer_model.spatial_embedding,
-                          torch.nn.Embedding)
+        assert isinstance(transformer_model.spatial_embedding, torch.nn.Embedding)
         assert transformer_model.spatial_embedding.num_embeddings == 10
         assert transformer_model.spatial_embedding.embedding_dim == 64
 
         # Temporal embedding
-        assert isinstance(
-            transformer_model.temporal_embedding, torch.nn.Embedding)
+        assert isinstance(transformer_model.temporal_embedding, torch.nn.Embedding)
         assert transformer_model.temporal_embedding.num_embeddings == 5
         assert transformer_model.temporal_embedding.embedding_dim == 64
 
@@ -255,7 +264,7 @@ class TestSpatioTemporalTransformer:
         # Verify mask token positions have non-zero logits
         for i, pos in enumerate(mask_positions):
             mask_token_pred = output[i, pos]
-            assert not torch.all(mask_token_pred == -float('inf'))
+            assert not torch.all(mask_token_pred == -float("inf"))
 
     def test_device_compatibility(self, transformer_model):
         """
@@ -268,13 +277,13 @@ class TestSpatioTemporalTransformer:
 
         # Test GPU if available
         if torch.cuda.is_available():
-            device = torch.device('cuda')
+            device = torch.device("cuda")
             transformer_model_gpu = transformer_model.to(device)
             input_tokens_gpu = input_tokens_cpu.to(device)
 
             output_gpu = transformer_model_gpu(input_tokens_gpu)
             assert output_gpu.shape == (4, 10, 1000)
-            assert output_gpu.device.type == 'cuda'
+            assert output_gpu.device.type == "cuda"
 
     def test_no_grad_modification(self, transformer_model):
         """
@@ -302,12 +311,12 @@ class TestSpatioTemporalLayer:
         Fixture to create a standard SpatioTemporalLayer for testing
         """
         return SpatioTemporalLayer(
-            dim=64,           # model dimension
-            num_heads=4,      # 4 attention heads
+            dim=64,  # model dimension
+            num_heads=4,  # 4 attention heads
             tokens_per_image=10,  # 10 tokens per image
-            attn_drop=0.1,    # 10% attention dropout
-            proj_drop=0.1,    # 10% projection dropout
-            ffn_drop=0.1      # 10% feed-forward dropout
+            attn_drop=0.1,  # 10% attention dropout
+            proj_drop=0.1,  # 10% projection dropout
+            ffn_drop=0.1,  # 10% feed-forward dropout
         )
 
     def test_initialization(self, spatiotemporal_layer):
@@ -380,9 +389,9 @@ class TestSpatioTemporalLayer:
         Test the layer works with different input sizes
         """
         test_sizes = [
-            (1, 11, 64),    # Single batch, standard number of tokens
-            (4, 44, 64),    # Multiple batches, more tokens
-            (3, 33, 64)     # Different batch and token combination
+            (1, 11, 64),  # Single batch, standard number of tokens
+            (4, 44, 64),  # Multiple batches, more tokens
+            (3, 33, 64),  # Different batch and token combination
         ]
 
         for batch, total_tokens, dim in test_sizes:
