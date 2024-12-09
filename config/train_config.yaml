@@ -1,7 +1,7 @@
 # Training Configuration
 
 # Data Loading Parameters
-batch_size: 8  # Number of samples per training batch
+batch_size: 48  # Number of samples per training batch
 num_workers: 20  # Number of subprocesses to use for data loading
 
 tokenizer_checkpoint: "checkpoint_epoch_15.pt"

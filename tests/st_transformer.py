@@ -289,7 +289,7 @@ class TestSpatioTemporalTransformer:
         """
         Test that the forward pass does not modify input gradient requirement
         """
-        input_tokens = torch.randint(0, 20, (4, 55)).to(torch.int32)
+        input_tokens = torch.randint(0, 20, (4, 55)).to(torch.int64)
 
         # Forward pass
         output = transformer_model(input_tokens)

@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 from models.st_transformer import (FeedForward, LayerNorm, PredictionHead,
@@ -205,10 +206,20 @@ class SpatioTemporalTransformer(nn.Module):
         tokens_to_predict = embeddings[:, -self.tokens_per_image :, :]
         logits = self.prediction_head(tokens_to_predict)
 
-        ## Replace unmasked tokens with one hot encoding
-        # input_tokens = x[:, -self.tokens_per_image :]
+        # Replace unmasked tokens with one hot encoding
+        input_tokens = x[:, -self.tokens_per_image :]
 
-        ## Create a mask for tokens that should be predicted (masked tokens)
-        # mask = input_tokens == self.mask_token
+        # Create a mask for tokens that should be predicted (masked tokens)
+        mask = input_tokens == self.mask_token
+
+        one_hot = (
+            F.one_hot(input_tokens, num_classes=self.vocab_size + 1)[
+                :, :, : self.vocab_size
+            ]
+            * 1e4
+        )
+
+        # Replace logits for unmasked tokens with one-hot encoding
+        logits = torch.where(mask.unsqueeze(-1), logits, one_hot)
 
         return logits
