@@ -1,12 +1,12 @@
 # Transformer Model Configuration
 _target_: models.st_transformer.SpatioTemporalTransformer
 # Model Architecture Dimensions
-dim: 512  # Embedding and hidden layer dimension
-num_heads: 8  # Number of attention heads
-num_layers: 4  # Number of transformer layers
+dim: 256  # Embedding and hidden layer dimension
+num_heads: 4  # Number of attention heads
+num_layers: 2  # Number of transformer layers
 
 # Context and Tokenization Parameters
-context_length: 20  # Maximum sequence length
+context_length: 10  # Maximum sequence length
 tokens_per_image: 256  # Number of tokens used to represent an image
 vocab_size: 512  # Total number of unique tokens in the vocabulary
 num_actions: 3  # Number of distinct action types in the model
