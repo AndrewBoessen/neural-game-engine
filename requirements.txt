@@ -13,6 +13,7 @@ dataset
 einops
 requests
 pytest
+pygame
 transformers
 scipy
 lpips

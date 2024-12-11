@@ -178,7 +178,9 @@ class SpatioTemporalTransformer(nn.Module):
         )
 
         # Add temporal embeddings to the main embeddings
-        embeddings[:, :, : self.dim] += temporal_embeddings
+        embeddings[:, :, : self.dim] = (
+            embeddings[:, :, : self.dim] + temporal_embeddings
+        )
 
         # Spatial embedding for non-action tokens
         spatial_mask = ~action_mask
@@ -196,7 +198,9 @@ class SpatioTemporalTransformer(nn.Module):
 
         # Expand and add spatial embeddings
         spatial_embeddings = spatial_embeddings.unsqueeze(0).expand(batch_size, -1, -1)
-        embeddings[:, spatial_mask, : self.dim] += spatial_embeddings
+        embeddings[:, spatial_mask, : self.dim] = (
+            embeddings[:, spatial_mask, : self.dim] + spatial_embeddings
+        )
 
         # Attention Layers
         for layer in self.layers:
