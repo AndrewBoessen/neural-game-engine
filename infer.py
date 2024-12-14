@@ -1,3 +1,5 @@
+import argparse
+
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +15,24 @@ from models.tokenizer import Decoder, Encoder, EncoderDecoderConfig, Tokenizer
 from utils.train_utils import TransformerTrainer, load_config
 
 
-def tensor_to_video(tensor, output_path="output.mp4", fps=15):
+def get_pos_player(observe):
+    observe_int = (observe * 255).astype(np.uint8)
+    ids = np.where(np.sum(observe_int == [214, 92, 92], -1) == 3)
+    return ids[0].mean(), ids[1].mean()
+
+
+def get_pos_flags(observe):
+    observe_int = (observe * 255).astype(np.uint8)
+    if np.any(np.sum(observe_int == [184, 50, 50], -1) == 3):
+        ids = np.where(np.sum(observe_int == [184, 50, 50], -1) == 3)
+        return ids[0].mean(), ids[1].mean()
+    else:
+        base = 0
+        ids = np.where(np.sum(observe_int[base:-60] == [66, 72, 200], -1) == 3)
+        return ids[0].mean() + base, ids[1].mean()
+
+
+def tensor_to_video(tensor, output_path="output.mp4", fps=30):
     """
     Convert a tensor of RGB images to a video.
 
@@ -58,7 +77,30 @@ def tensor_to_video(tensor, output_path="output.mp4", fps=15):
 
 
 def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Video Generation Inference Script")
+    parser.add_argument(
+        "--gen_iterations",
+        type=int,
+        default=8,
+        help="Number of iterations in gen_image function (default: 8)",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.5,
+        help="Temperature parameter for gen_image (default: 0.5)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="output.mp4",
+        help="Output video filename (default: output.mp4)",
+    )
+    args = parser.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # load configs
     tokenizer_config = load_config("config/tokenizer/config.yaml")
     transformer_config = load_config("config/engine/config.yaml")
@@ -142,8 +184,21 @@ def main():
     frames_to_gen = 40
     gen_frames = []
     for i in tqdm(range(frames_to_gen)):
+        observe_tokens = tokens[-2]
+        observe = tokenizer.decode(
+            rearrange(observe_tokens, "(h w) e -> e h w").contiguous()
+        )
+        r_a, c_a = get_pos_player(observe)
+        r_f, c_f = get_pos_flags(observe)
+        v_f = np.arctan2(r_f - r_a, c_f - c_a)
+        if v_f < -0.1:
+            act_t = 1
+        elif v_f > 0.1:
+            act_t = 2
+        else:
+            act_t = 0
         tokens[-1] = mask  # mask last image
-        actions[-1] = 513
+        actions[-1] = 513 + act_t
 
         sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1)
 
@@ -194,7 +249,7 @@ def main():
 
         # Collect decoded images
         decoded_images.extend(batch_images)
-    tensor_to_video(image)
+    tensor_to_video(image, output_path=args.output)
 
 
 if __name__ == "__main__":
