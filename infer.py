@@ -1,38 +1,19 @@
 import argparse
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from einops import rearrange
-from torchinfo import summary
 from tqdm import tqdm
 
 from data.token_dataset_reader import TokenDataset
 from models.maskgit import gen_image
 from models.st_transformer import SpatioTemporalTransformer
 from models.tokenizer import Decoder, Encoder, EncoderDecoderConfig, Tokenizer
-from utils.train_utils import TransformerTrainer, load_config
+from utils.train_utils import load_config
 
 
-def get_pos_player(observe):
-    observe_int = (observe * 255).astype(np.uint8)
-    ids = np.where(np.sum(observe_int == [214, 92, 92], -1) == 3)
-    return ids[0].mean(), ids[1].mean()
-
-
-def get_pos_flags(observe):
-    observe_int = (observe * 255).astype(np.uint8)
-    if np.any(np.sum(observe_int == [184, 50, 50], -1) == 3):
-        ids = np.where(np.sum(observe_int == [184, 50, 50], -1) == 3)
-        return ids[0].mean(), ids[1].mean()
-    else:
-        base = 0
-        ids = np.where(np.sum(observe_int[base:-60] == [66, 72, 200], -1) == 3)
-        return ids[0].mean() + base, ids[1].mean()
-
-
-def tensor_to_video(tensor, output_path="output.mp4", fps=30):
+def tensor_to_video(tensor, output_path="output.mp4", fps=15):
     """
     Convert a tensor of RGB images to a video.
 
@@ -88,7 +69,7 @@ def main():
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.5,
+        default=0.4,
         help="Temperature parameter for gen_image (default: 0.5)",
     )
     parser.add_argument(
@@ -143,7 +124,7 @@ def main():
         encoder=encoder,
         decoder=decoder,
         with_lpips=False,
-    )
+    ).to(device)
 
     engine = SpatioTemporalTransformer(
         dim=transformer_config["dim"],
@@ -157,13 +138,12 @@ def main():
         attn_drop=transformer_config["attn_drop"],
         proj_drop=transformer_config["proj_drop"],
         ffn_drop=transformer_config["ffn_drop"],
-    )
+    ).to(device)
 
     engine_checkpoint = torch.load(
         "checkpoint_epoch_77.pt", map_location=device, weights_only=True
     )
     engine.load_state_dict(engine_checkpoint["model_state_dict"], strict=True)
-    summary(engine)
 
     engine.eval()
     tokenizer.eval()
@@ -173,32 +153,27 @@ def main():
     )
     tokenizer.load_state_dict(checkpoint["model_state_dict"], strict=False)
 
-    tokens, actions = val_dataset[30]
-
+    frames_to_gen = 40
+    sample_start = 42
+    tokens, actions = val_dataset[sample_start]
+    next_actions = []
+    for i in range(frames_to_gen // 20):
+        _, new_actions = val_dataset[sample_start + 1 + i]
+        next_actions.append(new_actions)
+    next_actions = torch.stack(next_actions, dim=0).reshape(-1)
+    next_actions += engine.vocab_size + 1
+    print(next_actions.shape)
+    print(next_actions)
     context = tokens
 
     mask = torch.ones(tokens_per_image) * mask_token
 
     actions += engine.vocab_size + 1
 
-    frames_to_gen = 40
     gen_frames = []
     for i in tqdm(range(frames_to_gen)):
-        observe_tokens = tokens[-2]
-        observe = tokenizer.decode(
-            rearrange(observe_tokens, "(h w) e -> e h w").contiguous()
-        )
-        r_a, c_a = get_pos_player(observe)
-        r_f, c_f = get_pos_flags(observe)
-        v_f = np.arctan2(r_f - r_a, c_f - c_a)
-        if v_f < -0.1:
-            act_t = 1
-        elif v_f > 0.1:
-            act_t = 2
-        else:
-            act_t = 0
         tokens[-1] = mask  # mask last image
-        actions[-1] = 513 + act_t
+        actions[-1] = next_actions[i]
 
         sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1)
 
@@ -206,7 +181,12 @@ def main():
 
         with torch.no_grad():
             image = gen_image(
-                sequence, engine, 8, tokens_per_image, mask_token, temperature=0.5
+                sequence,
+                engine,
+                args.gen_iterations,
+                tokens_per_image,
+                mask_token,
+                temperature=args.temperature,
             )
 
         tokens[-1] = image[:, -tokens_per_image:].squeeze(0)
@@ -217,39 +197,16 @@ def main():
         actions = torch.roll(actions, shifts=-1, dims=0)
 
     gen_frames = torch.stack(gen_frames)
-    results = torch.cat([context, gen_frames]).to(device)
+    results = torch.cat([context, gen_frames])
 
-    batch_size = 8
-    # Prepare for batched decoding
-    total_batches = (len(results) + batch_size - 1) // batch_size
+    embeddings = tokenizer.embedding(results.to(device))
+    embeddings = rearrange(embeddings, "b (h w) e -> b e h w", h=16, w=16)
+
     decoded_images = []
-
-    for i in range(total_batches):
-        # Slice the current batch
-        batch_start = i * batch_size
-        batch_end = min((i + 1) * batch_size, len(results))
-        batch_results = results[batch_start:batch_end]
-        # Clear cache to free up GPU memory
-        torch.cuda.empty_cache()
-        # Embedding and rearrangement
-        z_q = rearrange(
-            tokenizer.embedding(batch_results),
-            "b (h w) e -> b e h w",
-            b=len(batch_results),
-            e=512,
-            h=16,
-            w=16,
-        ).contiguous()
-
-        print(z_q.shape)
-
-        # Decode the batch
-        batch_images = tokenizer.decode(z_q, should_postprocess=True)
-        print(batch_images.shape)
-
-        # Collect decoded images
-        decoded_images.extend(batch_images)
-    tensor_to_video(image, output_path=args.output)
+    for i in range(len(embeddings)):
+        image = tokenizer.decode(embeddings[i], should_postprocess=True)
+        decoded_images.append(image.cpu().detach())
+    tensor_to_video(torch.stack(decoded_images), output_path=args.output)
 
 
 if __name__ == "__main__":

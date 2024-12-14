@@ -269,7 +269,7 @@ def main():
     engine.eval()
     tokenizer.eval()
 
-    states, actions = val_dataset[0]
+    states, actions = val_dataset[42]
 
     keymap = {(pygame.K_RIGHT,): 1, (pygame.K_LEFT,): 2}
 

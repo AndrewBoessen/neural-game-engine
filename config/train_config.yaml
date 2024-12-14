@@ -4,7 +4,7 @@
 batch_size: 8  # Number of samples per training batch
 num_workers: 12  # Number of subprocesses to use for data loading
 
-tokenizer_checkpoint: "checkpoint_epoch_3.pt"
+tokenizer_checkpoint: "checkpoint_epoch_15.pt"
 
 # Optimization Parameters
 optimizer:
