@@ -87,10 +87,10 @@ class Game:
                     image_tokens = gen_image(
                         sequence,
                         self.engine,
-                        4,
+                        8,
                         self.engine.tokens_per_image,
                         self.engine.mask_token,
-                        temperature=0.5,
+                        temperature=0.4,
                     )
                     self.states[-1] = image_tokens[
                         :, -self.engine.tokens_per_image :
@@ -279,7 +279,7 @@ def main():
         states,
         actions,
         keymap,
-        size=(256, 256),
+        size=(512, 512),
         fps=15,
         verbose=False,
         device=device,
