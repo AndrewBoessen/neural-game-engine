@@ -90,7 +90,7 @@ class Game:
                         8,
                         self.engine.tokens_per_image,
                         self.engine.mask_token,
-                        temperature=0.4,
+                        temperature=0.1,
                     )
                     self.states[-1] = image_tokens[
                         :, -self.engine.tokens_per_image :
@@ -269,7 +269,7 @@ def main():
     engine.eval()
     tokenizer.eval()
 
-    states, actions = val_dataset[200]
+    states, actions = val_dataset[0]
 
     keymap = {(pygame.K_RIGHT,): 1, (pygame.K_LEFT,): 2}
 
