@@ -162,7 +162,7 @@ cython_debug/
 #.idea/
 #
 /experiments
-/gameplay_data
-/token_data
+/gameplay_data*
+/token_data*
 
 *.pt

@@ -13,7 +13,7 @@ from models.tokenizer import Decoder, Encoder, EncoderDecoderConfig, Tokenizer
 from utils.train_utils import TransformerTrainer, load_config
 
 
-def tensor_to_video(tensor, output_path="output.mp4", fps=30):
+def tensor_to_video(tensor, output_path="output.mp4", fps=15):
     """
     Convert a tensor of RGB images to a video.
 
@@ -59,7 +59,6 @@ def tensor_to_video(tensor, output_path="output.mp4", fps=30):
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = "cpu"
     # load configs
     tokenizer_config = load_config("config/tokenizer/config.yaml")
     transformer_config = load_config("config/engine/config.yaml")
@@ -117,58 +116,84 @@ def main():
         proj_drop=transformer_config["proj_drop"],
         ffn_drop=transformer_config["ffn_drop"],
     )
+
     engine_checkpoint = torch.load(
         "checkpoint_epoch_77.pt", map_location=device, weights_only=True
     )
     engine.load_state_dict(engine_checkpoint["model_state_dict"], strict=True)
     summary(engine)
 
+    engine.eval()
+    tokenizer.eval()
+
     checkpoint = torch.load(
         train_config["tokenizer_checkpoint"], map_location=device, weights_only=True
     )
     tokenizer.load_state_dict(checkpoint["model_state_dict"], strict=False)
 
-    tokens, actions = val_dataset[20]
+    tokens, actions = val_dataset[30]
 
     context = tokens
 
     mask = torch.ones(tokens_per_image) * mask_token
 
     actions += engine.vocab_size + 1
-    for i in tqdm(range(20)):
+
+    frames_to_gen = 40
+    gen_frames = []
+    for i in tqdm(range(frames_to_gen)):
         tokens[-1] = mask  # mask last image
         actions[-1] = 513
 
         sequence = torch.cat([actions.unsqueeze(-1), tokens], dim=-1)
 
-        sequence = rearrange(sequence.unsqueeze(0), "b t l -> b (t l)")
+        sequence = rearrange(sequence.unsqueeze(0), "b t l -> b (t l)").to(device)
 
-        image = gen_image(
-            sequence, engine, 8, tokens_per_image, mask_token, temperature=0.5
-        )
+        with torch.no_grad():
+            image = gen_image(
+                sequence, engine, 8, tokens_per_image, mask_token, temperature=0.5
+            )
 
         tokens[-1] = image[:, -tokens_per_image:].squeeze(0)
+        gen_frames.append(tokens[-1])
 
         # shift all tokens to left one spot
-        if i < 19:
-            tokens = torch.roll(tokens, shifts=-1, dims=0)
-            actions = torch.roll(actions, shifts=-1, dims=0)
+        tokens = torch.roll(tokens, shifts=-1, dims=0)
+        actions = torch.roll(actions, shifts=-1, dims=0)
 
-    z_q = rearrange(
-        tokenizer.embedding(torch.cat([context, tokens])),
-        "b (h w) e -> b e h w",
-        b=len(tokens) + len(context),
-        e=512,
-        h=16,
-        w=16,
-    ).contiguous()
+    gen_frames = torch.stack(gen_frames)
+    results = torch.cat([context, gen_frames]).to(device)
 
-    image = tokenizer.decode(z_q, should_postprocess=True)
+    batch_size = 8
+    # Prepare for batched decoding
+    total_batches = (len(results) + batch_size - 1) // batch_size
+    decoded_images = []
 
-    # plt.imshow(rearrange(image[-1], "c h w -> h w c").cpu().detach().numpy())
-    # plt.savefig("action0.png")
-    # plt.show()
+    for i in range(total_batches):
+        # Slice the current batch
+        batch_start = i * batch_size
+        batch_end = min((i + 1) * batch_size, len(results))
+        batch_results = results[batch_start:batch_end]
+        # Clear cache to free up GPU memory
+        torch.cuda.empty_cache()
+        # Embedding and rearrangement
+        z_q = rearrange(
+            tokenizer.embedding(batch_results),
+            "b (h w) e -> b e h w",
+            b=len(batch_results),
+            e=512,
+            h=16,
+            w=16,
+        ).contiguous()
 
+        print(z_q.shape)
+
+        # Decode the batch
+        batch_images = tokenizer.decode(z_q, should_postprocess=True)
+        print(batch_images.shape)
+
+        # Collect decoded images
+        decoded_images.extend(batch_images)
     tensor_to_video(image)
 
 
