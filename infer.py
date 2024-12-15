@@ -57,13 +57,13 @@ def main():
     parser.add_argument(
         "--gen_iterations",
         type=int,
-        default=8,
+        default=4,
         help="Number of iterations in gen_image function (default: 8)",
     )
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.1,
+        default=0.5,
         help="Temperature parameter for gen_image (default: 0.5)",
     )
     parser.add_argument(
@@ -148,7 +148,7 @@ def main():
     tokenizer.load_state_dict(checkpoint["model_state_dict"], strict=False)
 
     frames_to_gen = 60
-    sample_start = 420
+    sample_start = 505
     tokens, actions = val_dataset[sample_start]
     next_actions = []
     for i in range(frames_to_gen // 20):
