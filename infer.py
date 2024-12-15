@@ -154,7 +154,7 @@ def main():
     tokenizer.load_state_dict(checkpoint["model_state_dict"], strict=False)
 
     frames_to_gen = 40
-    sample_start = 42
+    sample_start = 420
     tokens, actions = val_dataset[sample_start]
     next_actions = []
     for i in range(frames_to_gen // 20):
@@ -162,8 +162,6 @@ def main():
         next_actions.append(new_actions)
     next_actions = torch.stack(next_actions, dim=0).reshape(-1)
     next_actions += engine.vocab_size + 1
-    print(next_actions.shape)
-    print(next_actions)
     context = tokens
 
     mask = torch.ones(tokens_per_image) * mask_token
