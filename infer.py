@@ -147,7 +147,7 @@ def main():
     )
     tokenizer.load_state_dict(checkpoint["model_state_dict"], strict=False)
 
-    frames_to_gen = 40
+    frames_to_gen = 60
     sample_start = 420
     tokens, actions = val_dataset[sample_start]
     next_actions = []
