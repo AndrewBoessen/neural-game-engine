@@ -1,6 +1,7 @@
 import argparse
 
 import cv2
+import imageio
 import numpy as np
 import torch
 from einops import rearrange
@@ -13,14 +14,14 @@ from models.tokenizer import Decoder, Encoder, EncoderDecoderConfig, Tokenizer
 from utils.train_utils import load_config
 
 
-def tensor_to_video(tensor, output_path="output.mp4", fps=15):
+def tensor_to_gif(tensor, output_path="output.gif", fps=15):
     """
-    Convert a tensor of RGB images to a video.
+    Convert a tensor of RGB images to a high-quality GIF.
 
     Args:
     tensor (torch.Tensor): Input tensor of shape (num_frames, height, width, 3) or (num_frames, 3, height, width)
-    output_path (str): Path to save the output video
-    fps (int): Frames per second of the output video
+    output_path (str): Path to save the output GIF
+    fps (int): Frames per second of the output GIF
     """
     # Ensure tensor is on CPU and convert to numpy
     if isinstance(tensor, torch.Tensor):
@@ -39,22 +40,15 @@ def tensor_to_video(tensor, output_path="output.mp4", fps=15):
     else:
         images = images.astype(np.uint8)
 
-    # Get video dimensions
-    num_frames, height, width, _ = images.shape
+    # Save as high-quality GIF using imageio
+    imageio.mimsave(
+        output_path,
+        images,
+        fps=fps,
+        quality=10,  # Highest quality setting
+    )
 
-    # Define the codec and create VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-    # Write frames to video
-    for frame in images:
-        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        out.write(frame_bgr)
-
-    # Release the video writer
-    out.release()
-
-    print(f"Video saved to {output_path}")
+    print(f"GIF saved to {output_path}")
 
 
 def main():
@@ -69,14 +63,14 @@ def main():
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.4,
+        default=0.1,
         help="Temperature parameter for gen_image (default: 0.5)",
     )
     parser.add_argument(
         "--output",
         type=str,
-        default="output.mp4",
-        help="Output video filename (default: output.mp4)",
+        default="output.gif",
+        help="Output video filename (default: output.gif)",
     )
     args = parser.parse_args()
 
@@ -204,7 +198,7 @@ def main():
     for i in range(len(embeddings)):
         image = tokenizer.decode(embeddings[i], should_postprocess=True)
         decoded_images.append(image.cpu().detach())
-    tensor_to_video(torch.stack(decoded_images), output_path=args.output)
+    tensor_to_gif(torch.stack(decoded_images), output_path=args.output)
 
 
 if __name__ == "__main__":
