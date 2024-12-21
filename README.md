@@ -34,7 +34,13 @@ pip install -r requirements.txt
 
 ### Gameplay Dataset
 
-https://github.com/user-attachments/assets/da96e2de-e910-4d27-af82-9a6ebc292f7f
+The model is trained on a dataset of ~33,000 frames and evaluated on a set of ~8,000 frames.
 
+To train the transformer game-engine model, the dataset is preprocessed and tokenized
 
+#### Download Datasets
 
+|                                          Gameplay Dataset                                           |                                            Token Dataset                                            |
+| :-------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
+| [Download Here](https://drive.google.com/file/d/1mr900bK0xpwiQskSB4KJvwtrbwtnEJcY/view?usp=sharing) | [Download Here](https://drive.google.com/file/d/19UJVwnnpArB_rG6F4Jn3TTqxKfn04mhD/view?usp=sharing) |
+|                                    Extract to `/gameplay_data/`                                     |                                      Extract to `/token_data/`                                      |
