@@ -32,6 +32,12 @@ pip install -r requirements.txt
 
 ### Pretrained Model Checkpoints
 
+Download model checkpoints and move to root directory
+
+|                                          VQ-VAE Checkpoint                                          |                                    Neural Game Engine Checkpoint                                    |
+| :-------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
+| [Download Here](https://drive.google.com/file/d/1xIec8GLG2CwhUb2dGMrpVb2z1NoUrjHJ/view?usp=sharing) | [Download Here](https://drive.google.com/file/d/1exsjhvskQ48hqWKFC-quVvV3ftBuZ4cW/view?usp=sharing) |
+
 ### Gameplay Dataset
 
 The model is trained on a dataset of ~33,000 frames and evaluated on a set of ~8,000 frames.
