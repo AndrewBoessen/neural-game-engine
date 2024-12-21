@@ -68,3 +68,7 @@ Follow installation instructions above to install token data and model checkpoin
 ```
 python play.py
 ```
+
+## Architecture
+
+![neural game engine](./assets/architecture.png)
