@@ -55,4 +55,16 @@ https://github.com/user-attachments/assets/b91b7eef-b018-4bfa-99d8-05ac5def9104
 
 ## Play
 
+An interactive game script is available that generates frames based on user input
+
 https://github.com/user-attachments/assets/58f30664-9cac-4037-8458-acb96b8ba519
+
+Example gameplay recording. Running on Nvidia RTX 4070 at 15fps
+
+### Run Interactive Game Environment
+
+Follow installation instructions above to install token data and model checkpoints
+
+```
+python play.py
+```
