@@ -75,12 +75,7 @@ Full technical report available [here](./assets/technical_report.pdf)
 
 ![neural game engine](./assets/architecture.png)
 
-_Interactive Game Engine. An RL agent is used to create a dataset consisting of
-observation, action pairs. The observations are encoded into states with the VAE encoder $E$.
-The sequential model (ST-Transformer) takes the encoded state, action pairs and predicts
-the next state $s_{t+1}$. The state to be predicted, initially represented as a mask token,
-$\text{[MASK]}$, is iteratively generated in a non-auto-regressive manner with MaskGIT and bidirectional attention. Predicted states are projected to pixel space with the VAE decoder
-$D$._
+*Interactive Game Engine. An RL agent is used to create a dataset consisting of observation, action pairs. The observations are encoded into states with the VAE encoder E. The sequential model (ST-Transformer) takes the encoded state, action pairs and predicts the next state s_t+1. The state to be predicted, initially represented as a mask token, \[MASK\], is iteratively generated in a non-auto regressive manner with MaskGIT and bidirectional attention. Predicted states are projected to pixel space with the VAE decoder D.*
 
 ### Data Collection (RL Agent)
 
