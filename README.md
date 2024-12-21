@@ -71,15 +71,30 @@ python play.py
 
 ## Architecture
 
-Full technical report available [here](./assets/technical_report.pdf)
+The Neural Game Engine architecture leverages a combination of a Vector Quantized Variational Auto-Encoder (VQ-VAE) for image tokenization and a Spatio-Temporal Transformer (ST-Transformer) for modeling game dynamics. This design enables the simulation of interactive game environments by capturing the causal relationships between user actions and game state transitions.
 
 ![neural game engine](./assets/architecture.png)
 
 *Interactive Game Engine. An RL agent is used to create a dataset consisting of observation, action pairs. The observations are encoded into states with the VAE encoder E. The sequential model (ST-Transformer) takes the encoded state, action pairs and predicts the next state s_t+1. The state to be predicted, initially represented as a mask token, \[MASK\], is iteratively generated in a non-auto regressive manner with MaskGIT and bidirectional attention. Predicted states are projected to pixel space with the VAE decoder D.*
 
 ### Data Collection (RL Agent)
+A reinforcement learning (RL) agent is employed to collect gameplay data, generating a dataset of observation-action pairs. The agent interacts with the environment and records its trajectories, simulating diverse scenarios. This dataset, consisting of approximately 33,000 training frames and 8,000 validation frames, serves as the foundation for training both the image tokenizer and the game engine.
 
 ### Image Tokenizer (VQ-VAE)
+The VQ-VAE encodes game frames into a discrete latent space, forming a tokenized representation of the image. It uses:
+- **Encoder**: Converts 256×256 RGB images into a 16×16 grid of tokens, reducing spatial complexity.
+- **Codebook**: Contains 512 unique tokens used for quantization.
+- **Decoder**: Reconstructs images from the tokenized representations.
+This compression allows the ST-Transformer to operate on discrete tokens rather than raw pixel data, enabling efficient sequence modeling.
 
 ### Game Engine (ST-Transformer)
+The ST-Transformer predicts future game states based on past states and user actions. It processes sequences of state-action token pairs, capturing both spatial and temporal dependencies:
+- **Spatial Attention**: Models relationships between tokens within a single frame.
+- **Temporal Attention**: Models dependencies across multiple frames.
+- **MaskGIT Algorithm**: Uses bidirectional attention and iterative refinement to generate states in parallel, reducing computation time while maintaining visual fidelity.
+
+### State Prediction and Interactivity
+The predicted tokens are fed back into the VQ-VAE decoder to generate the next game frame. User actions influence the prediction pipeline, ensuring real-time interaction and causality. The iterative non-autoregressive process minimizes quality degradation over time, though edge cases (e.g., object collisions) remain challenging.
+
+This architecture demonstrates the feasibility of neural networks in simulating dynamic, visually coherent game environments with real-time responsiveness. For further details, refer to the [full technical report](./assets/technical_report.pdf).
 
